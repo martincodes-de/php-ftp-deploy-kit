@@ -21,64 +21,11 @@ final class InitCommandTest extends ProjectTestCase
 
     public function testAsksForThePresetWhenInteractive(): void
     {
-        $tester = $this->init([], ['1', '']);
+        $tester = $this->init([], ['1']);
 
         self::assertSame(0, $tester->getStatusCode());
         self::assertStringContainsString('Which preset?', $tester->getDisplay());
         self::assertFileExists("{$this->dir}/deploy.ini.example");
-    }
-
-    public function testThePublicFolderDefaultsToPublic(): void
-    {
-        $this->init(['preset' => 'symfony']);
-
-        $ini = (string) file_get_contents("{$this->dir}/deploy.ini.example");
-        self::assertStringContainsString('/public/.htaccess', $ini);
-        self::assertStringContainsString('rm -rf public/assets', $ini);
-        self::assertStringNotContainsString('@public@', $ini . file_get_contents("{$this->dir}/htaccess.root"));
-    }
-
-    public function testThePublicFolderCanBeSetWithAnOption(): void
-    {
-        $this->init(['preset' => 'symfony', '--public' => 'web']);
-
-        $ini = (string) file_get_contents("{$this->dir}/deploy.ini.example");
-        self::assertStringContainsString("\t/web/.htaccess", $ini);
-        self::assertStringContainsString('htaccess.public web/.htaccess', $ini);
-        self::assertStringContainsString('rm -rf web/assets', $ini);
-        self::assertStringContainsString('RewriteRule ^(?!web/)(.*)$ web/$1 [L]', (string) file_get_contents("{$this->dir}/htaccess.root"));
-    }
-
-    public function testThePublicFolderIsAskedForWhenInteractive(): void
-    {
-        $this->init(['preset' => 'symfony'], ['html']);
-
-        self::assertStringContainsString('RewriteRule ^(?!html/)(.*)$ html/$1 [L]', (string) file_get_contents("{$this->dir}/htaccess.root"));
-    }
-
-    public function testPresetsWithoutPublicFolderDoNotAsk(): void
-    {
-        $tester = $this->init(['preset' => 'static'], ['unused']);
-
-        self::assertStringNotContainsString('Folder your web server serves', $tester->getDisplay());
-    }
-
-    #[DataProvider('invalidPublicFolders')]
-    public function testRejectsUnsafePublicFolders(string $folder): void
-    {
-        $tester = $this->init(['preset' => 'symfony', '--public' => $folder]);
-
-        self::assertSame(1, $tester->getStatusCode());
-        self::assertStringContainsString('Invalid public folder', $tester->getDisplay());
-        self::assertFileDoesNotExist("{$this->dir}/deploy.ini.example");
-    }
-
-    /** @return iterable<string,array{string}> */
-    public static function invalidPublicFolders(): iterable
-    {
-        yield 'parent folder' => ['../outside'];
-        yield 'spaces' => ['my folder'];
-        yield 'regex characters' => ['pub(lic'];
     }
 
     public function testCreatesTheWorkingIniButKeepsAnExistingOne(): void

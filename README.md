@@ -69,7 +69,12 @@ Steps like building assets or clearing caches are plain `before[]`/`after[]` job
 
 `symfony` (production build, prod flag, cache purge, `.htaccess` files), `symfony-sqlite` (adds the database settings and a backup before the build) and `static`. Add your own as a folder, see [CONTRIBUTING.md](CONTRIBUTING.md); `pfdk init ./my-presets/wordpress` installs one from a path.
 
-**Web root and `.htaccess` (Apache):** the Symfony presets put two editable files next to your `deploy.ini` and upload them: `htaccess.public` becomes `public/.htaccess` (sends requests to `index.php`), and `htaccess.root` becomes `.htaccess` in the remote root. The latter sends every request into `public/`, so `.env.prod.local`, `src/` and `var/` cannot be downloaded even if the host serves the upload folder itself. If you can set the web root to `public/` in your hosting panel, that is the better setup and the root file is simply unused. The public folder is plain text in the installed files; if yours is not `public`, run `pfdk init symfony --public=web` (or edit the files). Other web servers than Apache need their own rules.
+**Web root and `.htaccess` (Apache):** the Symfony presets put two editable files next to your `deploy.ini` and upload both. Which one does the work depends on your hosting:
+
+- The web root points to `public/` (best): `htaccess.public` becomes `public/.htaccess` and sends requests to `index.php`.
+- You can only put the whole folder into the web root: `htaccess.root` becomes `.htaccess` there and rewrites every request into `public/`, so `.env.prod.local`, `src/` and `var/` cannot be downloaded.
+
+The file you do not need stays unused. If you want neither, delete the two `upload:` lines, the two `.htaccess` ignore entries and the files. The folder is called `public` in the files; change it there if yours is named differently. Other web servers than Apache need their own rules.
 
 ## Development
 
