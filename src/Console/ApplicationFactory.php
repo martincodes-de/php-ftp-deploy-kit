@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 namespace Pfdk\Console;
 
+use Composer\InstalledVersions;
 use Pfdk\Config\DeployConfig;
 use Pfdk\Remote\RemoteFiles;
 use Symfony\Component\Console\Application;
@@ -12,7 +13,7 @@ final class ApplicationFactory
     /** @param (callable(DeployConfig):RemoteFiles)|null $remoteFactory */
     public static function create(?callable $remoteFactory = null, ?string $presetsDir = null): Application
     {
-        $application = new Application('pfdk (PHP FTP Deploy Kit)', '0.3.0');
+        $application = new Application('pfdk (PHP FTP Deploy Kit)', self::version());
         $application->addCommands([
             new InitCommand($remoteFactory, $presetsDir),
             new DeployCommand($remoteFactory),
@@ -24,5 +25,12 @@ final class ApplicationFactory
         ]);
 
         return $application;
+    }
+
+    private static function version(): string
+    {
+        $package = 'martincodes-de/php-ftp-deploy-kit';
+
+        return InstalledVersions::isInstalled($package) ? (InstalledVersions::getPrettyVersion($package) ?? 'dev') : 'dev';
     }
 }
