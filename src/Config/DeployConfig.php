@@ -21,25 +21,26 @@ final class DeployConfig
         public readonly ?string $type = null,
         public readonly ?string $migrateCommand = null,
         public readonly bool $ddev = true,
+        public readonly ?string $section = null,
     ) {
     }
 
-    public static function load(string $file): self
+    public static function load(string $file, ?string $section = null): self
     {
         if (!is_file($file)) {
             throw new ConfigNotFound("Config not found: $file (create it with `pfdk init <preset>`).");
         }
         // The warning would duplicate the exception below.
-        $raw = @parse_ini_file($file);
+        $raw = @parse_ini_file($file, true);
         if ($raw === false) {
             throw new \RuntimeException("Cannot parse $file");
         }
 
-        return self::fromArray($file, array_change_key_case($raw, CASE_LOWER));
+        return self::fromArray($file, self::selectSection($raw, $section), $section);
     }
 
     /** @param array<string,mixed> $values keys already lower-cased */
-    public static function fromArray(string $file, array $values): self
+    public static function fromArray(string $file, array $values, ?string $section = null): self
     {
         $remote = self::unquote((string) ($values['remote'] ?? ''));
         $parts = parse_url($remote);
@@ -62,7 +63,42 @@ final class DeployConfig
             isset($values['pfdk_type']) ? strtolower(self::unquote((string) $values['pfdk_type'])) : null,
             isset($values['pfdk_migrate_command']) ? self::unquote((string) $values['pfdk_migrate_command']) : null,
             self::ddevEnabled($values['pfdk_ddev'] ?? 'auto'),
+            $section,
         );
+    }
+
+    /**
+     * @param array<string,mixed> $raw
+     *
+     * @return array<string,mixed> the settings of the chosen target, keys lower-cased
+     */
+    private static function selectSection(array $raw, ?string $section): array
+    {
+        // Lists such as before[] are arrays too; sections are the keyed ones.
+        $sections = array_filter($raw, static fn (mixed $value): bool => is_array($value) && !array_is_list($value));
+        $top = array_change_key_case(array_diff_key($raw, $sections), CASE_LOWER);
+
+        // Same rule as dg: a top-level remote means one deployment, no sections.
+        if (is_string($top['remote'] ?? null)) {
+            if ($section !== null) {
+                throw new \RuntimeException("--section $section was given, but this ini has no sections.");
+            }
+
+            return $top;
+        }
+        if ($sections === []) {
+            return $top;
+        }
+
+        $names = implode(', ', array_keys($sections));
+        if ($section === null) {
+            throw new \RuntimeException("This ini has several targets; pick one with --section: $names");
+        }
+        if (!isset($sections[$section])) {
+            throw new \RuntimeException("Unknown section '$section'. Available: $names");
+        }
+
+        return array_change_key_case($sections[$section], CASE_LOWER) + $top;
     }
 
     /** The folder dg deploys (`local`), because the ini often lives in a subfolder such as ftp-deployment/. */

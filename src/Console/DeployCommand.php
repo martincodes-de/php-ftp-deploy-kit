@@ -38,6 +38,9 @@ final class DeployCommand extends BaseCommand
         }
 
         $command = [PHP_BINARY, $tool, $config->file];
+        if ($config->section !== null) {
+            array_push($command, '--section', $config->section);
+        }
         if ($input->getOption('dry')) {
             $command[] = '--test';
         }

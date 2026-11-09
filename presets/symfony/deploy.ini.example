@@ -7,19 +7,16 @@ remote = "ftps://USER:PASSWORD@HOST/REMOTE_PATH"
 local = ..
 allowDelete = yes
 
-pfdk_db = var/database.db
-pfdk_backups = ftp-deployment/backups
-pfdk_backups_keep = 10
-
-; pfdk runs build and migration commands through DDEV when it is running; set to off to always use the host.
+; pfdk runs build commands through DDEV when it is running; set to off to always use the host.
 ; pfdk_ddev = off
 
-; Opt in to `pfdk db:migrate` (pull the live DB, run the Doctrine migrations locally, push it back).
-; pfdk_type = symfony
-; pfdk_migrate_command = php bin/console doctrine:migrations:migrate --no-interaction
+; @pfdk:settings
 
+; Production secrets (APP_SECRET, API keys, ...) belong in <project>/.env.prod.local, which Symfony
+; ignores in git (/.env.*.local) and this deploy uploads.
 ignore = "
 	.git*
+	.idea
 	.phpunit.result.cache
 	/.ddev
 	/tests
@@ -27,18 +24,27 @@ ignore = "
 	/var
 	/ftp-deployment
 	/.env.local
+	/.env.dev
 	/.env.test
+	/Makefile
+	/AGENTS.md
+	/compose*.yaml
+	/phpunit.dist.xml
+	/phpstan.dist.neon
 	*.log
 "
 
 ; Your steps. `pfdk exec` runs a command in the project folder, through DDEV when it runs.
-; The backup comes first: the next step removes dev dependencies.
-before[] = "local: php ftp-deployment/vendor/bin/pfdk backup -c ftp-deployment/deploy.ini"
+; @pfdk:before-build
 ; APP_ENV=prod is needed because Symfony's composer scripts would otherwise look for dev-only bundles.
 before[] = "local: php ftp-deployment/vendor/bin/pfdk exec -c ftp-deployment/deploy.ini -- APP_ENV=prod composer install --no-dev --optimize-autoloader"
+; Uncomment if the app uses AssetMapper: compiles the assets into public/assets.
+; before[] = "local: php ftp-deployment/vendor/bin/pfdk exec -c ftp-deployment/deploy.ini -- APP_ENV=prod php bin/console asset-map:compile --no-interaction"
 ; Symfony reads APP_ENV from .env.local, which is not uploaded, so ship a prod flag instead.
 before[] = "upload: ftp-deployment/env-prod-flag .env.local"
 
 purge[] = "var/cache"
 
 after[] = "local: php ftp-deployment/vendor/bin/pfdk exec -c ftp-deployment/deploy.ini -- composer install"
+; Compiled assets must not stay locally, or the dev server would keep serving them.
+after[] = "local: php ftp-deployment/vendor/bin/pfdk exec -c ftp-deployment/deploy.ini -- rm -rf public/assets"

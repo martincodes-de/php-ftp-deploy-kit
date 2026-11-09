@@ -20,6 +20,18 @@ final class DeployCommandTest extends ProjectTestCase
         self::assertStringNotContainsString('--test', $tester->getDisplay());
     }
 
+    public function testForwardsTheSectionToDg(): void
+    {
+        $tool = "{$this->dir}/fake-deployment";
+        file_put_contents($tool, "<?php\necho 'args: ' . implode(' ', array_slice(\$argv, 1));\n");
+        file_put_contents("{$this->dir}/deploy.ini", "pfdk_tool = $tool\n[staging]\nremote = \"ftps://u:p@s.example.org/app\"\n[production]\nremote = \"ftps://u:p@example.org/app\"\n");
+
+        $tester = $this->deploy(['--section' => 'production']);
+
+        self::assertSame(0, $tester->getStatusCode());
+        self::assertStringContainsString('--section production', $tester->getDisplay());
+    }
+
     public function testDryRunPassesTestFlag(): void
     {
         $this->writeTool(0);

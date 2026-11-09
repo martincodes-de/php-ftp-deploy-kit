@@ -29,13 +29,15 @@ abstract class BaseCommand extends Command
     protected function configure(): void
     {
         $this->addOption('config', 'c', InputOption::VALUE_REQUIRED, 'Path to deploy.ini', 'deploy.ini');
+        $this->addOption('section', 's', InputOption::VALUE_REQUIRED, 'Deploy target, if the ini has several sections');
     }
 
     protected function config(InputInterface $input): DeployConfig
     {
         $path = (string) $input->getOption('config');
+        $section = $input->getOption('section');
 
-        return DeployConfig::load(preg_match('~^(/|[A-Za-z]:)~', $path) === 1 ? $path : getcwd() . '/' . $path);
+        return DeployConfig::load(preg_match('~^(/|[A-Za-z]:)~', $path) === 1 ? $path : getcwd() . '/' . $path, $section);
     }
 
     protected function remote(DeployConfig $config, OutputInterface $output): RemoteFiles

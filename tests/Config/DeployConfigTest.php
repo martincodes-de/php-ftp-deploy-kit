@@ -121,6 +121,66 @@ final class DeployConfigTest extends ProjectTestCase
         $this->config('')->requireDb();
     }
 
+    public function testSectionOverridesTheTopLevelDefaults(): void
+    {
+        $file = $this->writeSectionedIni();
+
+        $production = DeployConfig::load($file, 'production');
+        $staging = DeployConfig::load($file, 'staging');
+
+        self::assertSame(['example.org', 'var/app.db', 'backups-prod', 'production'], [$production->host, $production->db, $production->backups, $production->section]);
+        self::assertSame(['staging.example.org', 'var/app.db', 'backups'], [$staging->host, $staging->db, $staging->backups]);
+    }
+
+    public function testSectionedIniNeedsAnExplicitSection(): void
+    {
+        $file = $this->writeSectionedIni();
+
+        $this->expectExceptionMessage('pick one with --section: staging, production');
+        DeployConfig::load($file);
+    }
+
+    public function testUnknownSectionListsTheAvailableOnes(): void
+    {
+        $file = $this->writeSectionedIni();
+
+        $this->expectExceptionMessage("Unknown section 'live'. Available: staging, production");
+        DeployConfig::load($file, 'live');
+    }
+
+    public function testSectionOnASingleTargetIniIsRejected(): void
+    {
+        $file = $this->writeIni("before[] = \"local: one\"\nbefore[] = \"local: two\"\n");
+
+        $this->expectExceptionMessage('has no sections');
+        DeployConfig::load($file, 'production');
+    }
+
+    public function testJobListsAreNotMistakenForSections(): void
+    {
+        $file = $this->writeIni("before[] = \"local: one\"\nbefore[] = \"local: two\"\n");
+
+        self::assertSame('example.org', DeployConfig::load($file)->host);
+    }
+
+    private function writeSectionedIni(): string
+    {
+        $file = "{$this->dir}/sections.ini";
+        file_put_contents($file, <<<INI
+            local = .
+            pfdk_db = var/app.db
+
+            [staging]
+            remote = "ftps://u:p@staging.example.org/app"
+
+            [production]
+            remote = "ftps://u:p@example.org/app"
+            pfdk_backups = backups-prod
+            INI);
+
+        return $file;
+    }
+
     public function testFileRemoteNeedsNoHost(): void
     {
         $config = DeployConfig::fromArray('deploy.ini', ['remote' => '"file:///srv/target"']);

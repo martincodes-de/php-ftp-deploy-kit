@@ -31,6 +31,9 @@ final class MigrateCommand extends BaseCommand
         }
 
         $arguments = ['--config' => $input->getOption('config')];
+        if ($config->section !== null) {
+            $arguments['--section'] = $config->section;
+        }
 
         if ($this->getApplication()->find('db:pull')->run($this->subInput($input, $arguments), $output) !== self::SUCCESS) {
             $output->writeln('<error>Pull failed; nothing was migrated or pushed.</error>');

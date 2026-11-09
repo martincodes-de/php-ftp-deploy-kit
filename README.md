@@ -4,7 +4,7 @@ A thin layer over [dg/ftp-deployment](https://github.com/dg/ftp-deployment) for 
 
 - **One config file:** your `deploy.ini`. dg/ftp-deployment reads it, and `pfdk` reads the same file.
 - **Presets:** ready-made `deploy.ini.example` files, e.g. for Symfony with SQLite.
-- **Database commands:** back up, pull and push a database file over FTP, always backing up what gets overwritten.
+- **Database commands:** back up, pull and push a SQLite database file over FTP, always backing up what gets overwritten. MariaDB/MySQL are not supported by these commands (deploying the code works for any app).
 - **Your steps stay yours:** build, cache and similar steps are plain `before[]`/`after[]` jobs in the ini.
 
 ## When to use it

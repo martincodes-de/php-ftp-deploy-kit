@@ -20,6 +20,16 @@ Makefiles around. Origin of the implementation: activity-match's `Makefile` and 
 
 The project is open for reuse, forks and changes.
 
+## Scope guard
+
+The goal is to set up a deployment for a Symfony app (with or without SQLite) over FTP in minutes, and to keep
+it up to date afterwards. pfdk stays a thin layer: dg/ftp-deployment does the deploying and pfdk never
+reimplements it. A new feature must serve that goal or protect data (backups, safe pull/push); otherwise leave it
+out. Check the size before adding more (currently about 1000 lines of source in `src/`).
+
+Databases: only a SQLite file can be pulled and pushed over FTP. MariaDB/MySQL are not supported by the database
+commands; deploying the code works for any app, and a dump would need a shell or a server-side script.
+
 ## Decisions (do not re-litigate without asking)
 
 - `dg/ftp-deployment` does the actual deployment. pfdk wraps it, never reimplements it.

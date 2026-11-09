@@ -90,6 +90,34 @@ final class MigrateCommandTest extends ProjectTestCase
         self::assertSame("live\n", $this->remote->files[self::LIVE]);
     }
 
+    public function testPullAndPushUseTheSelectedSection(): void
+    {
+        file_put_contents("{$this->dir}/deploy.ini", <<<INI
+            pfdk_db = var/database.db
+            pfdk_type = symfony
+            pfdk_migrate_command = "echo migrated >> var/database.db"
+
+            [staging]
+            remote = "ftps://u:p@staging.example.org/app"
+
+            [production]
+            remote = "ftps://u:p@example.org/app"
+            INI);
+        $this->remote->files[self::LIVE] = "live\n";
+        $sections = [];
+        $factory = function ($config) use (&$sections) {
+            $sections[] = $config->section;
+
+            return $this->remote;
+        };
+        $tester = new CommandTester(ApplicationFactory::create($factory)->find('db:migrate'));
+
+        $tester->execute(['--section' => 'staging', '--yes' => true], ['interactive' => false]);
+
+        self::assertSame(0, $tester->getStatusCode());
+        self::assertSame(['staging', 'staging'], $sections);
+    }
+
     public function testDefaultMigrationRunsThroughDdevWhenItRuns(): void
     {
         $log = $this->installFakeDdev();

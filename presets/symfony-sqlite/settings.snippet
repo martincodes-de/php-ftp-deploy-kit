@@ -1,0 +1,7 @@
+pfdk_db = var/database.db
+pfdk_backups = ftp-deployment/backups
+pfdk_backups_keep = 10
+
+; Opt in to `pfdk db:migrate` (pull the live DB, run the Doctrine migrations locally, push it back).
+; pfdk_type = symfony
+; pfdk_migrate_command = php bin/console doctrine:migrations:migrate --no-interaction
