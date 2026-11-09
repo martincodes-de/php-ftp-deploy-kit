@@ -29,7 +29,6 @@ final class InitCommand extends BaseCommand
     {
         $this->addArgument('preset', InputArgument::OPTIONAL, 'Preset name or path to your own preset folder; omit to choose');
         $this->addOption('public', null, InputOption::VALUE_REQUIRED, 'Folder your web server serves, for presets that use it (default: public)');
-        $this->addOption('without', null, InputOption::VALUE_REQUIRED | InputOption::VALUE_IS_ARRAY, 'Leave out an optional part of the preset, e.g. htaccess');
     }
 
     protected function execute(InputInterface $input, OutputInterface $output): int
@@ -46,7 +45,6 @@ final class InitCommand extends BaseCommand
 
             return self::FAILURE;
         }
-        $files = $this->withoutFeatures($files, $input->getOption('without'));
 
         try {
             $public = $this->publicDir($input, $output, $files);
@@ -65,7 +63,7 @@ final class InitCommand extends BaseCommand
             // Not after "dg/": that is the name of the deployment tool, not our folder.
             $content = preg_replace('~(?<!dg/)ftp-deployment~', basename((string) getcwd()), $content);
             $content = str_replace('@public@', $public, $content);
-            file_put_contents($name, preg_replace('~^; @pfdk:[a-z0-9-]+( [a-z0-9-]+)?[ \t]*\r?\n~m', '', $content));
+            file_put_contents($name, preg_replace('~^; @pfdk:[a-z0-9-]+[ \t]*\r?\n~m', '', $content));
             $output->writeln("created: $name");
         }
 
@@ -77,26 +75,6 @@ final class InitCommand extends BaseCommand
         $output->writeln('Next: edit deploy.ini, then run `pfdk deploy --dry`.');
 
         return self::SUCCESS;
-    }
-
-    /**
-     * Drops the blocks between `; @pfdk:optional-start <feature>` and `; @pfdk:optional-end <feature>`
-     * and the files named `<feature>.*`.
-     *
-     * @param array<string,string> $files
-     * @param list<string>         $features
-     *
-     * @return array<string,string>
-     */
-    private function withoutFeatures(array $files, array $features): array
-    {
-        foreach ($features as $feature) {
-            $name = preg_quote($feature, '~');
-            $files = array_filter($files, static fn (string $file): bool => !str_starts_with($file, "$feature."), ARRAY_FILTER_USE_KEY);
-            $files = preg_replace("~^; @pfdk:optional-start {$name}[ \t]*\r?\n.*?^; @pfdk:optional-end {$name}[ \t]*\r?\n~ms", '', $files);
-        }
-
-        return $files;
     }
 
     /**

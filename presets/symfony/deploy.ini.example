@@ -24,10 +24,8 @@ ignore = "
 	/var
 	/ftp-deployment
 	/.env.local
-; @pfdk:optional-start htaccess
 	/.htaccess
 	/@public@/.htaccess
-; @pfdk:optional-end htaccess
 	/.env.dev
 	/.env.test
 	/Makefile
@@ -46,14 +44,10 @@ before[] = "local: php ftp-deployment/vendor/bin/pfdk exec -c ftp-deployment/dep
 ; before[] = "local: php ftp-deployment/vendor/bin/pfdk exec -c ftp-deployment/deploy.ini -- APP_ENV=prod php bin/console asset-map:compile --no-interaction"
 ; Symfony reads APP_ENV from .env.local, which is not uploaded, so ship a prod flag instead.
 before[] = "upload: ftp-deployment/env-prod-flag .env.local"
-; @pfdk:optional-start htaccess
 ; Apache rules (edit the two htaccess.* files next to this ini): nothing outside @public@/ is served, and
 ; requests go to Symfony's index.php. Ignored above, so dg neither overwrites nor deletes them on the server.
-; Not needed? Delete these lines, the two ignore entries for .htaccess above and the htaccess.* files,
-; or run `pfdk init symfony --without=htaccess` in a fresh folder.
 before[] = "upload: ftp-deployment/htaccess.root .htaccess"
 before[] = "upload: ftp-deployment/htaccess.public @public@/.htaccess"
-; @pfdk:optional-end htaccess
 
 purge[] = "var/cache"
 
