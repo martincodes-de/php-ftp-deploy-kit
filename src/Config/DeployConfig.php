@@ -16,6 +16,7 @@ final class DeployConfig
         public readonly ?string $db,
         public readonly string $backups,
         public readonly ?string $tool,
+        public readonly string $local = '.',
     ) {
     }
 
@@ -38,26 +39,31 @@ final class DeployConfig
     {
         $remote = self::unquote((string) ($values['remote'] ?? ''));
         $parts = parse_url($remote);
-        if ($remote === '' || $parts === false || !isset($parts['scheme'], $parts['host'])) {
+        if ($remote === '' || $parts === false || !isset($parts['scheme']) || (!isset($parts['host']) && $parts['scheme'] !== 'file')) {
             throw new \RuntimeException('"remote" in the ini must look like ftp://host/path');
         }
 
         return new self(
             $file,
             $parts['scheme'],
-            $parts['host'] . (isset($parts['port']) ? ':' . $parts['port'] : ''),
+            ($parts['host'] ?? '') . (isset($parts['port']) ? ':' . $parts['port'] : ''),
             isset($parts['user']) ? rawurldecode($parts['user']) : self::unquote((string) ($values['user'] ?? '')),
             isset($parts['pass']) ? rawurldecode($parts['pass']) : self::unquote((string) ($values['password'] ?? '')),
             trim($parts['path'] ?? '', '/'),
             isset($values['pfdk_db']) ? trim(self::unquote((string) $values['pfdk_db']), '/') : null,
             self::unquote((string) ($values['pfdk_backups'] ?? 'backups')),
             isset($values['pfdk_tool']) ? self::unquote((string) $values['pfdk_tool']) : null,
+            self::unquote((string) ($values['local'] ?? '.')),
         );
     }
 
+    /** The folder dg deploys (`local`), because the ini often lives in a subfolder such as ftp-deployment/. */
     public function projectDir(): string
     {
-        return dirname($this->file);
+        $absolute = preg_match('~^(/|[A-Za-z]:)~', $this->local) === 1;
+        $path = $absolute ? $this->local : dirname($this->file) . '/' . $this->local;
+
+        return realpath($path) ?: $path;
     }
 
     public function remoteUrl(string $relative): string

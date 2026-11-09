@@ -15,14 +15,26 @@ I like Nette's FTP deployment tool and use it for my small apps. The same standa
 
 Requires PHP 8.2+ with `ext-curl`.
 
+Install pfdk in its own folder inside your project. A deploy runs `composer install --no-dev`, which would otherwise remove the tool that is running it.
+
 ```bash
+mkdir ftp-deployment && cd ftp-deployment
+composer init --no-interaction --name=my/ftp-deployment
 composer config repositories.pfdk vcs https://github.com/martincodes-de/php-ftp-deploy-kit
-composer require --dev martincodes-de/php-ftp-deploy-kit
-vendor/bin/pfdk init symfony-sqlite
-cp deploy.ini.example deploy.ini      # keep deploy.ini out of git
+composer require martincodes-de/php-ftp-deploy-kit
+php vendor/bin/pfdk init symfony-sqlite
+cp deploy.ini.example deploy.ini
 ```
 
-Fill in `remote = "ftp://USER:PASSWORD@HOST/PATH"` (use `ftps://` or `sftp://` if the host supports it).
+Add `ftp-deployment/deploy.ini`, `ftp-deployment/backups/` and `ftp-deployment/vendor/` to your `.gitignore`, and fill in `remote = "ftp://USER:PASSWORD@HOST/PATH"` (use `ftps://` or `sftp://` if the host supports it).
+
+Run all commands from the project root:
+
+```bash
+php ftp-deployment/vendor/bin/pfdk deploy --dry -c ftp-deployment/deploy.ini
+```
+
+The ini's `local` key (`..` in the preset) is the project folder. `pfdk_db` and a relative `pfdk_backups` are resolved against it.
 
 ## Commands
 

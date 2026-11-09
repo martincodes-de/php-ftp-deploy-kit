@@ -37,11 +37,11 @@ This project is developed spec-driven first: every change starts as an OpenSpec 
 (`/opsx:propose`, `/opsx:apply`, `/opsx:archive`), and code follows the spec, not the other way round.
 Rules live in `openspec/config.yaml`.
 
-Before a change is archived, in this order:
+Before every change is archived: **run the full test suite; it must pass.** Never archive on red or unrun tests.
 
-1. **Run the full test suite; it must pass.** Never archive on red or unrun tests.
-2. **Run a code review at medium level** (`/code-review medium`) and fix or consciously dismiss every finding.
-   This is how we make sure a new spec/change is actually good, not just green.
+Code review is not run per change. When a planned series of changes is complete, run **one code review at
+medium level** (`/code-review medium`) over all of it and fix or consciously dismiss every finding.
+This is how we make sure the specs and changes are actually good, not just green.
 
 The point: the package is the safety net for production deployments and database overwrites, so a regression
 here can destroy a live site's data.

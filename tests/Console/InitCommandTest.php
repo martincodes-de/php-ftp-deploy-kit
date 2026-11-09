@@ -63,6 +63,18 @@ final class InitCommandTest extends ProjectTestCase
         self::assertSame('HOST', DeployConfig::load("{$this->dir}/deploy.ini")->host);
     }
 
+    public function testSymfonyPresetBacksUpBeforeRemovingDevDependencies(): void
+    {
+        $this->init(['preset' => 'symfony-sqlite']);
+        $jobs = parse_ini_file("{$this->dir}/deploy.ini.example")['before'];
+
+        $backup = array_keys(array_filter($jobs, fn (string $job) => str_contains($job, 'pfdk backup')));
+        $noDev = array_keys(array_filter($jobs, fn (string $job) => str_contains($job, '--no-dev')));
+
+        self::assertNotEmpty($backup);
+        self::assertLessThan($noDev[0], $backup[0]);
+    }
+
     /** @return iterable<string,array{string}> */
     public static function presetNames(): iterable
     {

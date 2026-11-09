@@ -1,12 +1,13 @@
-; Copy to deploy.ini (gitignored). This is the only config file: dg/ftp-deployment
-; reads it, and pfdk reads the same file for backup / db:pull / db:push.
+; Copy to deploy.ini (gitignored). Expected location: <project>/ftp-deployment/deploy.ini,
+; with pfdk installed in <project>/ftp-deployment/ (see the README).
+; Run everything from the project root, e.g.:
+;   php ftp-deployment/vendor/bin/pfdk deploy -c ftp-deployment/deploy.ini
 remote = "ftp://USER:PASSWORD@HOST/REMOTE_PATH"
-local = .
+local = ..
 allowDelete = yes
 
-; --- pfdk extras (ignored by dg/ftp-deployment) ---
 pfdk_db = var/database.db
-pfdk_backups = backups
+pfdk_backups = ftp-deployment/backups
 
 ignore = "
 	.git*
@@ -14,22 +15,20 @@ ignore = "
 	/tests
 	/node_modules
 	/var
-	/backups
-	/deploy.ini*
+	/ftp-deployment
 	/.env.local
 	/.env.test
 	*.log
 "
 
-; --- Your steps: anything you need goes here as before[] / after[] ---
-; Production build (adjust: asset compile, tailwind, ...):
-before[] = "local: composer install --no-dev --optimize-autoloader"
-; Backup of the live DB (non-fatal on the first deploy):
-before[] = "local: vendor/bin/pfdk backup -c deploy.ini || true"
-; Make the server boot in prod (Symfony reads APP_ENV from .env.local):
-before[] = "upload: env-prod-flag .env.local"
+; Your steps. Prefix commands with `ddev` if you build inside DDEV.
+; The backup comes first: the next step removes dev dependencies.
+before[] = "local: php ftp-deployment/vendor/bin/pfdk backup -c ftp-deployment/deploy.ini"
+; APP_ENV=prod is needed because Symfony's composer scripts would otherwise look for dev-only bundles.
+before[] = "local: APP_ENV=prod composer install --no-dev --optimize-autoloader"
+; Symfony reads APP_ENV from .env.local, which is not uploaded, so ship a prod flag instead.
+before[] = "upload: ftp-deployment/env-prod-flag .env.local"
 
 purge[] = "var/cache"
 
-; Restore dev dependencies locally:
 after[] = "local: composer install"

@@ -37,7 +37,7 @@ rules:
   tasks:
     - Include the tests for each behavior in the same task that implements it.
     - Include a task to remove unnecessary comments from the touched code.
-    - The last tasks are always "Run the full test suite and make it pass", then "Run a code review at medium level and resolve its findings".
+    - The last task is always "Run the full test suite and make it pass". No per-change code review.
 
 operations:
   apply:
@@ -46,5 +46,5 @@ operations:
   archive:
     guidance:
       - Never archive a change before the full test suite has been run and passes.
-      - Before archiving, run a code review at medium level (/code-review medium) and fix or consciously dismiss every finding.
+      - Do not run a code review per change. After a planned series of changes is complete, run one code review at medium level (/code-review medium) over all of it and fix or consciously dismiss every finding.
       - Summarize the archive outcome before finishing.

@@ -55,6 +55,33 @@ final class DeployConfigTest extends ProjectTestCase
         self::assertSame('ftp://h/x.db', DeployConfig::fromArray('i', ['remote' => 'ftp://h'])->remoteUrl('x.db'));
     }
 
+    public function testProjectDirFollowsTheLocalKey(): void
+    {
+        mkdir("{$this->dir}/ftp-deployment");
+        $config = DeployConfig::fromArray("{$this->dir}/ftp-deployment/deploy.ini", [
+            'remote' => 'ftp://h/p',
+            'local' => '..',
+            'pfdk_db' => 'var/app.db',
+            'pfdk_backups' => 'ftp-deployment/backups',
+        ]);
+
+        self::assertSame(realpath($this->dir), $config->projectDir());
+        self::assertSame(realpath($this->dir) . '/var/app.db', $config->localDbFile());
+        self::assertSame(realpath($this->dir) . '/ftp-deployment/backups/a.db', $config->backupFile('a.db'));
+    }
+
+    public function testProjectDirDefaultsToTheIniFolder(): void
+    {
+        self::assertSame(realpath($this->dir), $this->config()->projectDir());
+    }
+
+    public function testAbsoluteLocalPathIsTheProjectDir(): void
+    {
+        $config = DeployConfig::fromArray("{$this->dir}/deploy.ini", ['remote' => 'ftp://h/p', 'local' => '/somewhere/else']);
+
+        self::assertSame('/somewhere/else', $config->projectDir());
+    }
+
     public function testResolvesLocalDatabaseInsideProject(): void
     {
         self::assertSame("{$this->dir}/var/database.db", $this->config()->localDbFile());
@@ -64,6 +91,19 @@ final class DeployConfigTest extends ProjectTestCase
     {
         $this->expectExceptionMessage('pfdk_db');
         $this->config('')->requireDb();
+    }
+
+    public function testFileRemoteNeedsNoHost(): void
+    {
+        $config = DeployConfig::fromArray('deploy.ini', ['remote' => '"file:///srv/target"']);
+
+        self::assertSame('file:///srv/target/var/app.db', $config->remoteUrl('var/app.db'));
+    }
+
+    public function testOtherSchemesStillNeedAHost(): void
+    {
+        $this->expectExceptionMessage('ftp://host/path');
+        DeployConfig::fromArray('deploy.ini', ['remote' => 'ftp:///path']);
     }
 
     public function testRejectsMissingFile(): void
