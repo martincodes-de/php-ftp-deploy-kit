@@ -29,7 +29,7 @@ The project is open for reuse, forks and changes.
 - Comments: do not comment by default. Remove unnecessary ones (anything that restates what the code does or
   the signature). Where a comment is needed, keep it as short as possible and explain why, never what.
   Apply this to every new change and to code you touch.
-- Names: package `martincodes/php-ftp-deploy-kit`, binary `pfdk`.
+- Names: package `martincodes-de/php-ftp-deploy-kit`, binary `pfdk`.
 
 ## Workflow: spec-driven development first
 

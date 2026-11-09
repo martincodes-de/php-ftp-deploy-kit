@@ -1,5 +1,5 @@
 {
-    "name": "martincodes/php-ftp-deploy-kit",
+    "name": "martincodes-de/php-ftp-deploy-kit",
     "description": "PHP FTP Deploy Kit: thin layer over dg/ftp-deployment for FTP-only hosting: presets, remote database backup/pull/push, one deploy.ini as the only config.",
     "type": "library",
     "license": "MIT",

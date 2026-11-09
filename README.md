@@ -17,7 +17,7 @@ Requires PHP 8.2+ with `ext-curl`.
 
 ```bash
 composer config repositories.pfdk vcs https://github.com/martincodes-de/php-ftp-deploy-kit
-composer require --dev martincodes/php-ftp-deploy-kit
+composer require --dev martincodes-de/php-ftp-deploy-kit
 vendor/bin/pfdk init symfony-sqlite
 cp deploy.ini.example deploy.ini      # keep deploy.ini out of git
 ```
