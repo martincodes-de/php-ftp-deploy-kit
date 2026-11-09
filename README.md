@@ -7,6 +7,14 @@ A thin layer over [dg/ftp-deployment](https://github.com/dg/ftp-deployment) for 
 - **Database commands:** back up, pull and push a database file over FTP, always backing up what gets overwritten.
 - **Your steps stay yours:** build, cache and similar steps are plain `before[]`/`after[]` jobs in the ini.
 
+## When to use it
+
+Use it when your only way onto the server is FTP, as with classic shared hosts such as bplaced: no SSH, no Composer on the server, but you want to ship a PHP app quickly. Everything is built on your machine (`composer install --no-dev`, assets, migrations) and uploaded as it is; `pfdk` handles the parts around it: backups, database pull/push and Symfony migrations.
+
+If you have SSH on the server, a tool that runs commands there (for example Deployer) is the better fit.
+
+`db:push` replaces the whole database file, so run it when nobody is writing to the live app, for example together with `db:migrate`.
+
 ## Why
 
 I like Nette's FTP deployment tool and use it for my apps. The same standard use cases kept coming back (back up, pull and push the database, run steps around a deploy), so this package puts them on top of it. Use it, fork it, change it; contributions are welcome.
