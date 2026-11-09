@@ -9,7 +9,9 @@ one `deploy.ini` per app, the same commands everywhere.
 
 Positioning: this is the right tool when FTP is the only access (classic hosts like bplaced), so Composer
 and shell commands cannot run on the server and the app must be built locally and uploaded. With SSH access
-other tools fit better; do not add features that need a remote shell.
+other tools fit better; do not add features that need a remote shell. dg/ftp-deployment can still trigger
+server-side steps through its HTTP jobs and simple `remote:` file jobs; those stay user-defined ini jobs, not
+pfdk features.
 
 Why this exists: the owner likes Nette's FTP deployment tool (dg/ftp-deployment), which is what these apps
 already use. Over time the same standard use cases kept coming back (back up, pull and push the database,

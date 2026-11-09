@@ -11,7 +11,9 @@ A thin layer over [dg/ftp-deployment](https://github.com/dg/ftp-deployment) for 
 
 Use it when your only way onto the server is FTP, as with classic shared hosts such as bplaced: no SSH, no Composer on the server, but you want to ship a PHP app quickly. Everything is built on your machine (`composer install --no-dev`, assets, migrations) and uploaded as it is; `pfdk` handles the parts around it: backups, database pull/push and Symfony migrations.
 
-If you have SSH on the server, a tool that runs commands there (for example Deployer) is the better fit.
+dg/ftp-deployment itself can trigger server-side steps without a shell: its `before[]`, `afterUpload[]` and `after[]` jobs can call a script on your server over HTTP, and `remote:` jobs cover simple file operations such as `unzip` and `chmod`. Those stay your own jobs in the ini. `pfdk` runs migrations locally on a copy of the database, so they do not depend on anything running on the server.
+
+If you have SSH on the server and want to run arbitrary commands there, a tool built for that (for example Deployer) is the better fit.
 
 `db:push` replaces the whole database file, so run it when nobody is writing to the live app, for example together with `db:migrate`.
 
