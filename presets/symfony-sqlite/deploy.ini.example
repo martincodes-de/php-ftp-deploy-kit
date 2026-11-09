@@ -1,0 +1,35 @@
+; Copy to deploy.ini (gitignored). This is the only config file: dg/ftp-deployment
+; reads it, and pfdk reads the same file for backup / db:pull / db:push.
+remote = "ftp://USER:PASSWORD@HOST/REMOTE_PATH"
+local = .
+allowDelete = yes
+
+; --- pfdk extras (ignored by dg/ftp-deployment) ---
+pfdk_db = var/database.db
+pfdk_backups = backups
+
+ignore = "
+	.git*
+	/.ddev
+	/tests
+	/node_modules
+	/var
+	/backups
+	/deploy.ini*
+	/.env.local
+	/.env.test
+	*.log
+"
+
+; --- Your steps: anything you need goes here as before[] / after[] ---
+; Production build (adjust: asset compile, tailwind, ...):
+before[] = "local: composer install --no-dev --optimize-autoloader"
+; Backup of the live DB (non-fatal on the first deploy):
+before[] = "local: vendor/bin/pfdk backup -c deploy.ini || true"
+; Make the server boot in prod (Symfony reads APP_ENV from .env.local):
+before[] = "upload: env-prod-flag .env.local"
+
+purge[] = "var/cache"
+
+; Restore dev dependencies locally:
+after[] = "local: composer install"

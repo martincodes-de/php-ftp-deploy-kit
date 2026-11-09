@@ -1,0 +1,50 @@
+schema: spec-driven
+
+context: |
+  This project is developed spec-driven first: every change starts as an
+  OpenSpec change, code follows the spec.
+
+  PHP FTP Deploy Kit (pfdk): a Composer package that wraps dg/ftp-deployment
+  for FTP-only shared hosting. One deploy.ini is the only configuration file;
+  pfdk adds presets plus remote database backup, pull and push. There is no
+  maintenance-mode feature: users define any such step themselves in the
+  ini's before[]/after[] jobs.
+
+  Stack: PHP >= 8.2, Symfony Console + Process, ext-curl, PHPUnit.
+  Local development runs in DDEV without a database container
+  (`ddev start`, `ddev composer install`, `ddev exec vendor/bin/phpunit`).
+
+  Conventions:
+  - All code, comments, docs, READMEs and spec artifacts are written in English.
+  - Keep abstraction to a minimum. Each Symfony Console command is the
+    command: one class, one `execute()`, the logic written out in it. No
+    use-case layer, no buses, no handlers. Extract a helper only when two
+    commands need the same thing.
+  - The only test seam is `RemoteFiles` (FTP). Everything else is tested
+    for real with temp directories and the Console `CommandTester`.
+  - Do not comment by default. Remove unnecessary comments (anything that
+    restates what the code does, commented-out code, docblocks that repeat
+    the signature). A needed comment is as short as possible and explains
+    why, never what.
+  - Code must be easy to read and maintain: small focused classes and
+    methods, descriptive names, no cleverness.
+  - Test coverage is high and meaningful: every use case, config parsing
+    rule and console command has tests for the happy path and the
+    failure paths that matter (missing remote file, empty download,
+    aborted confirmation, invalid config).
+
+rules:
+  tasks:
+    - Include the tests for each behavior in the same task that implements it.
+    - Include a task to remove unnecessary comments from the touched code.
+    - The last tasks are always "Run the full test suite and make it pass", then "Run a code review at medium level and resolve its findings".
+
+operations:
+  apply:
+    guidance:
+      - Run `ddev exec vendor/bin/phpunit` after each task group and fix failures before continuing.
+  archive:
+    guidance:
+      - Never archive a change before the full test suite has been run and passes.
+      - Before archiving, run a code review at medium level (/code-review medium) and fix or consciously dismiss every finding.
+      - Summarize the archive outcome before finishing.

@@ -1,0 +1,8 @@
+remote = "ftp://USER:PASSWORD@HOST/REMOTE_PATH"
+local = dist
+allowDelete = yes
+ignore = "
+	.git*
+	*.map
+"
+; before[] = "local: npm run build"
