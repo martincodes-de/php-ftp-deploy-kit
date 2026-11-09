@@ -2,7 +2,7 @@
 
 ## Goal
 
-The owner deploys small PHP apps (mostly Symfony, often with SQLite) to FTP-only shared hosting.
+The owner deploys PHP apps (mostly Symfony, often with SQLite) to FTP-only shared hosting.
 Each app (activity-match, hatago, digital-birthday-invite, ...) had its own copy-pasted
 Makefile + `ftp-deployment/` folder. This package replaces those copies: one Composer package,
 one `deploy.ini` per app, the same commands everywhere.

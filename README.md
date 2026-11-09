@@ -1,6 +1,6 @@
 # PHP FTP Deploy Kit (`pfdk`)
 
-A thin layer over [dg/ftp-deployment](https://github.com/dg/ftp-deployment) for small PHP apps on FTP-only hosting.
+A thin layer over [dg/ftp-deployment](https://github.com/dg/ftp-deployment) for PHP apps on FTP-only hosting.
 
 - **One config file:** your `deploy.ini`. dg/ftp-deployment reads it, and `pfdk` reads the same file.
 - **Presets:** ready-made `deploy.ini.example` files, e.g. for Symfony with SQLite.
@@ -9,7 +9,7 @@ A thin layer over [dg/ftp-deployment](https://github.com/dg/ftp-deployment) for 
 
 ## Why
 
-I like Nette's FTP deployment tool and use it for my small apps. The same standard use cases kept coming back (back up, pull and push the database, run steps around a deploy), so this package puts them on top of it. Use it, fork it, change it; contributions are welcome.
+I like Nette's FTP deployment tool and use it for my apps. The same standard use cases kept coming back (back up, pull and push the database, run steps around a deploy), so this package puts them on top of it. Use it, fork it, change it; contributions are welcome.
 
 ## Install
 
