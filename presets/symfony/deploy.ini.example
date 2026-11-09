@@ -24,6 +24,8 @@ ignore = "
 	/var
 	/ftp-deployment
 	/.env.local
+	/.htaccess
+	/@public@/.htaccess
 	/.env.dev
 	/.env.test
 	/Makefile
@@ -38,13 +40,17 @@ ignore = "
 ; @pfdk:before-build
 ; APP_ENV=prod is needed because Symfony's composer scripts would otherwise look for dev-only bundles.
 before[] = "local: php ftp-deployment/vendor/bin/pfdk exec -c ftp-deployment/deploy.ini -- APP_ENV=prod composer install --no-dev --optimize-autoloader"
-; Uncomment if the app uses AssetMapper: compiles the assets into public/assets.
+; Uncomment if the app uses AssetMapper: compiles the assets into @public@/assets.
 ; before[] = "local: php ftp-deployment/vendor/bin/pfdk exec -c ftp-deployment/deploy.ini -- APP_ENV=prod php bin/console asset-map:compile --no-interaction"
 ; Symfony reads APP_ENV from .env.local, which is not uploaded, so ship a prod flag instead.
 before[] = "upload: ftp-deployment/env-prod-flag .env.local"
+; Apache rules (edit the two htaccess.* files next to this ini): nothing outside @public@/ is served, and
+; requests go to Symfony's index.php. Ignored above, so dg neither overwrites nor deletes them on the server.
+before[] = "upload: ftp-deployment/htaccess.root .htaccess"
+before[] = "upload: ftp-deployment/htaccess.public @public@/.htaccess"
 
 purge[] = "var/cache"
 
 after[] = "local: php ftp-deployment/vendor/bin/pfdk exec -c ftp-deployment/deploy.ini -- composer install"
 ; Compiled assets must not stay locally, or the dev server would keep serving them.
-after[] = "local: php ftp-deployment/vendor/bin/pfdk exec -c ftp-deployment/deploy.ini -- rm -rf public/assets"
+after[] = "local: php ftp-deployment/vendor/bin/pfdk exec -c ftp-deployment/deploy.ini -- rm -rf @public@/assets"

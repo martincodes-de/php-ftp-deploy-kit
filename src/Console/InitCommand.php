@@ -8,8 +8,10 @@ use Pfdk\Remote\RemoteFiles;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Input\InputArgument;
 use Symfony\Component\Console\Input\InputInterface;
+use Symfony\Component\Console\Input\InputOption;
 use Symfony\Component\Console\Output\OutputInterface;
 use Symfony\Component\Console\Question\ChoiceQuestion;
+use Symfony\Component\Console\Question\Question;
 
 #[AsCommand('init', 'Set up a deployment: copy a preset, create deploy.ini and ignore it in git')]
 final class InitCommand extends BaseCommand
@@ -26,6 +28,7 @@ final class InitCommand extends BaseCommand
     protected function configure(): void
     {
         $this->addArgument('preset', InputArgument::OPTIONAL, 'Preset name or path to your own preset folder; omit to choose');
+        $this->addOption('public', null, InputOption::VALUE_REQUIRED, 'Folder your web server serves, for presets that use it (default: public)');
     }
 
     protected function execute(InputInterface $input, OutputInterface $output): int
@@ -43,6 +46,14 @@ final class InitCommand extends BaseCommand
             return self::FAILURE;
         }
 
+        try {
+            $public = $this->publicDir($input, $output, $files);
+        } catch (\InvalidArgumentException $e) {
+            $output->writeln("<error>{$e->getMessage()}</error>");
+
+            return self::FAILURE;
+        }
+
         foreach ($files as $name => $content) {
             // The project owns these files after the first init, so never overwrite them.
             if (is_file($name)) {
@@ -51,6 +62,7 @@ final class InitCommand extends BaseCommand
             }
             // Not after "dg/": that is the name of the deployment tool, not our folder.
             $content = preg_replace('~(?<!dg/)ftp-deployment~', basename((string) getcwd()), $content);
+            $content = str_replace('@public@', $public, $content);
             file_put_contents($name, preg_replace('~^; @pfdk:[a-z0-9-]+[ \t]*\r?\n~m', '', $content));
             $output->writeln("created: $name");
         }
@@ -63,6 +75,29 @@ final class InitCommand extends BaseCommand
         $output->writeln('Next: edit deploy.ini, then run `pfdk deploy --dry`.');
 
         return self::SUCCESS;
+    }
+
+    /**
+     * The folder the web server serves. Only asked when the preset uses the @public@ placeholder.
+     *
+     * @param array<string,string> $files
+     */
+    private function publicDir(InputInterface $input, OutputInterface $output, array $files): string
+    {
+        $default = 'public';
+        $usesPlaceholder = array_filter($files, static fn (string $content): bool => str_contains($content, '@public@')) !== [];
+        $public = $input->getOption('public');
+
+        if ($public === null && $usesPlaceholder && $input->isInteractive()) {
+            $public = $this->getHelper('question')->ask($input, $output, new Question("Folder your web server serves [$default]: ", $default));
+        }
+
+        $public = trim((string) ($public ?? $default), '/');
+        if (preg_match('~^[A-Za-z0-9._-]+(/[A-Za-z0-9._-]+)*$~', $public) !== 1 || in_array('..', explode('/', $public), true)) {
+            throw new \InvalidArgumentException("Invalid public folder '$public'. Use a relative path such as public or web.");
+        }
+
+        return $public;
     }
 
     private function askForPreset(InputInterface $input, OutputInterface $output): ?string

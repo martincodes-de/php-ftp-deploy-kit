@@ -21,11 +21,64 @@ final class InitCommandTest extends ProjectTestCase
 
     public function testAsksForThePresetWhenInteractive(): void
     {
-        $tester = $this->init([], ['1']);
+        $tester = $this->init([], ['1', '']);
 
         self::assertSame(0, $tester->getStatusCode());
         self::assertStringContainsString('Which preset?', $tester->getDisplay());
         self::assertFileExists("{$this->dir}/deploy.ini.example");
+    }
+
+    public function testThePublicFolderDefaultsToPublic(): void
+    {
+        $this->init(['preset' => 'symfony']);
+
+        $ini = (string) file_get_contents("{$this->dir}/deploy.ini.example");
+        self::assertStringContainsString('/public/.htaccess', $ini);
+        self::assertStringContainsString('rm -rf public/assets', $ini);
+        self::assertStringNotContainsString('@public@', $ini . file_get_contents("{$this->dir}/htaccess.root"));
+    }
+
+    public function testThePublicFolderCanBeSetWithAnOption(): void
+    {
+        $this->init(['preset' => 'symfony', '--public' => 'web']);
+
+        $ini = (string) file_get_contents("{$this->dir}/deploy.ini.example");
+        self::assertStringContainsString("\t/web/.htaccess", $ini);
+        self::assertStringContainsString('htaccess.public web/.htaccess', $ini);
+        self::assertStringContainsString('rm -rf web/assets', $ini);
+        self::assertStringContainsString('RewriteRule ^(?!web/)(.*)$ web/$1 [L]', (string) file_get_contents("{$this->dir}/htaccess.root"));
+    }
+
+    public function testThePublicFolderIsAskedForWhenInteractive(): void
+    {
+        $this->init(['preset' => 'symfony'], ['html']);
+
+        self::assertStringContainsString('RewriteRule ^(?!html/)(.*)$ html/$1 [L]', (string) file_get_contents("{$this->dir}/htaccess.root"));
+    }
+
+    public function testPresetsWithoutPublicFolderDoNotAsk(): void
+    {
+        $tester = $this->init(['preset' => 'static'], ['unused']);
+
+        self::assertStringNotContainsString('Folder your web server serves', $tester->getDisplay());
+    }
+
+    #[DataProvider('invalidPublicFolders')]
+    public function testRejectsUnsafePublicFolders(string $folder): void
+    {
+        $tester = $this->init(['preset' => 'symfony', '--public' => $folder]);
+
+        self::assertSame(1, $tester->getStatusCode());
+        self::assertStringContainsString('Invalid public folder', $tester->getDisplay());
+        self::assertFileDoesNotExist("{$this->dir}/deploy.ini.example");
+    }
+
+    /** @return iterable<string,array{string}> */
+    public static function invalidPublicFolders(): iterable
+    {
+        yield 'parent folder' => ['../outside'];
+        yield 'spaces' => ['my folder'];
+        yield 'regex characters' => ['pub(lic'];
     }
 
     public function testCreatesTheWorkingIniButKeepsAnExistingOne(): void
@@ -211,6 +264,28 @@ final class InitCommandTest extends ProjectTestCase
         self::assertStringContainsString('pfdk_db = var/database.db', $raw);
         self::assertStringNotContainsString('@pfdk:', $raw);
         self::assertStringContainsString('rm -rf public/assets', $raw);
+    }
+
+    #[DataProvider('symfonyPresets')]
+    public function testSymfonyPresetsShipAndUploadTheHtaccessFiles(string $preset): void
+    {
+        $this->init(['preset' => $preset]);
+        $ini = parse_ini_file("{$this->dir}/deploy.ini.example");
+        $folder = basename($this->dir);
+
+        self::assertContains("upload: $folder/htaccess.root .htaccess", $ini['before']);
+        self::assertContains("upload: $folder/htaccess.public public/.htaccess", $ini['before']);
+        self::assertStringContainsString('/.htaccess', $ini['ignore']);
+        self::assertStringContainsString('/public/.htaccess', $ini['ignore']);
+        self::assertStringContainsString('RewriteRule ^(?!public/)(.*)$ public/$1', (string) file_get_contents("{$this->dir}/htaccess.root"));
+        self::assertStringContainsString('RewriteRule ^ %{ENV:BASE}/index.php [L]', (string) file_get_contents("{$this->dir}/htaccess.public"));
+    }
+
+    /** @return iterable<string,array{string}> */
+    public static function symfonyPresets(): iterable
+    {
+        yield 'symfony' => ['symfony'];
+        yield 'symfony-sqlite' => ['symfony-sqlite'];
     }
 
     public function testSymfonyPresetHasNoDatabaseStepsAndAssetsAreOptIn(): void

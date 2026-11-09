@@ -1,0 +1,8 @@
+# Uploaded as .htaccess in the remote root (Apache). It sends every request into @public@/,
+# so .env files, src/, var/ and everything else outside @public@/ cannot be downloaded.
+# If your host lets you set the web root to @public@/, this file is not needed.
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+    # Paths already below @public@/ are left alone, so the rule can never loop.
+    RewriteRule ^(?!@public@/)(.*)$ @public@/$1 [L]
+</IfModule>

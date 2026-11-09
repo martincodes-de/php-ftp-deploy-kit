@@ -67,7 +67,9 @@ Steps like building assets or clearing caches are plain `before[]`/`after[]` job
 
 ## Presets
 
-`symfony` (production build, prod flag, cache purge), `symfony-sqlite` (adds the database settings and a backup before the build) and `static`. Add your own as a folder, see [CONTRIBUTING.md](CONTRIBUTING.md); `pfdk init ./my-presets/wordpress` installs one from a path.
+`symfony` (production build, prod flag, cache purge, `.htaccess` files), `symfony-sqlite` (adds the database settings and a backup before the build) and `static`. Add your own as a folder, see [CONTRIBUTING.md](CONTRIBUTING.md); `pfdk init ./my-presets/wordpress` installs one from a path.
+
+**Web root and `.htaccess` (Apache):** the Symfony presets put two editable files next to your `deploy.ini` and upload them: `htaccess.public` becomes `public/.htaccess` (sends requests to `index.php`), and `htaccess.root` becomes `.htaccess` in the remote root. The latter sends every request into `public/`, so `.env.prod.local`, `src/` and `var/` cannot be downloaded even if the host serves the upload folder itself. If you can set the web root to `public/` in your hosting panel, that is the better setup and the root file is simply unused. The public folder is plain text in the installed files; if yours is not `public`, run `pfdk init symfony --public=web` (or edit the files). Other web servers than Apache need their own rules.
 
 ## Development
 
