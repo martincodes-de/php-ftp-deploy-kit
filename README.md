@@ -20,7 +20,6 @@ Install pfdk in its own folder inside your project. A deploy runs `composer inst
 ```bash
 mkdir ftp-deployment && cd ftp-deployment
 composer init --no-interaction --name=my/ftp-deployment
-composer config repositories.pfdk vcs https://github.com/martincodes-de/php-ftp-deploy-kit
 composer require martincodes-de/php-ftp-deploy-kit
 php vendor/bin/pfdk init symfony-sqlite
 cp deploy.ini.example deploy.ini
