@@ -20,7 +20,6 @@ final class ApplicationFactory
             new DbPullCommand($remoteFactory),
             new DbPushCommand($remoteFactory),
             new MigrateCommand($remoteFactory),
-            new CheckCommand($remoteFactory),
             new ExecCommand($remoteFactory),
         ]);
 

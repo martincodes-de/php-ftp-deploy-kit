@@ -20,7 +20,7 @@ final class DbPushCommand extends BaseCommand
 
     protected function execute(InputInterface $input, OutputInterface $output): int
     {
-        $config = $this->config($input);
+        $config = $this->config($input, $output);
         $local = $config->localDbFile();
 
         if (!is_file($local)) {

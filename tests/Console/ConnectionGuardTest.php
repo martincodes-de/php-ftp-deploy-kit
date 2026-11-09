@@ -8,53 +8,14 @@ use Pfdk\Tests\Support\InMemoryRemoteFiles;
 use Pfdk\Tests\Support\ProjectTestCase;
 use Symfony\Component\Console\Tester\CommandTester;
 
-final class CheckAndGuardTest extends ProjectTestCase
+final class ConnectionGuardTest extends ProjectTestCase
 {
-    public function testCheckReportsAWorkingConfig(): void
-    {
-        $this->writeIni();
-
-        $tester = $this->cli('check');
-
-        self::assertSame(0, $tester->getStatusCode());
-        self::assertStringContainsString('curl protocols', $tester->getDisplay());
-        self::assertStringContainsString('OK: ftp:// works', $tester->getDisplay());
-    }
-
-    public function testCheckWithoutConfigShowsOnlyTheGeneralReport(): void
-    {
-        $tester = $this->cli('check');
-
-        self::assertSame(0, $tester->getStatusCode());
-        self::assertStringContainsString('Only the general report', $tester->getDisplay());
-    }
-
-    public function testCheckFailsForABrokenConfigInsteadOfSkippingIt(): void
-    {
-        file_put_contents("{$this->dir}/deploy.ini", "remote = \"nonsense\"\n");
-
-        $tester = $this->cli('check');
-
-        self::assertSame(1, $tester->getStatusCode());
-        self::assertStringContainsString('ftp://host/path', $tester->getDisplay());
-    }
-
-    public function testCheckFailsForAnUnsupportedProtocol(): void
-    {
-        $this->writeRemote('gopher://host/path');
-
-        $tester = $this->cli('check');
-
-        self::assertSame(1, $tester->getStatusCode());
-        self::assertStringContainsString("Unsupported scheme 'gopher://'", $tester->getDisplay());
-    }
-
     public function testRemoteCommandsStopBeforeAnyTransferWhenTheProtocolIsUnsupported(): void
     {
         $this->writeRemote('gopher://host/path');
         $remote = new InMemoryRemoteFiles(['var/database.db' => 'live']);
 
-        $this->expectExceptionMessage('pfdk check');
+        $this->expectExceptionMessage("Unsupported scheme 'gopher://'");
         $this->cli('backup', fn () => $remote);
     }
 
@@ -84,6 +45,11 @@ final class CheckAndGuardTest extends ProjectTestCase
 
             self::assertStringNotContainsString('unencrypted', $display, $remote);
         }
+    }
+
+    public function testThereIsNoCheckCommand(): void
+    {
+        self::assertFalse(ApplicationFactory::create()->has('check'));
     }
 
     private function writeRemote(string $remote): void

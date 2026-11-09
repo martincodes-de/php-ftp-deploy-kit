@@ -12,7 +12,7 @@ final class DbPullCommand extends BaseCommand
 {
     protected function execute(InputInterface $input, OutputInterface $output): int
     {
-        $config = $this->config($input);
+        $config = $this->config($input, $output);
         $stamp = $this->stamp();
         $pulled = $config->backupFile("database-pulled-$stamp.db");
 

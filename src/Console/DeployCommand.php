@@ -3,11 +3,13 @@ declare(strict_types=1);
 
 namespace Pfdk\Console;
 
+use Composer\InstalledVersions;
 use Pfdk\Config\DeployConfig;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Input\InputOption;
 use Symfony\Component\Console\Output\OutputInterface;
+use Symfony\Component\Console\Question\ConfirmationQuestion;
 use Symfony\Component\Process\Process;
 
 #[AsCommand('deploy', 'Run dg/ftp-deployment with the deploy.ini; all steps live in its before[]/after[] jobs')]
@@ -22,18 +24,22 @@ final class DeployCommand extends BaseCommand
 
     protected function execute(InputInterface $input, OutputInterface $output): int
     {
-        $config = $this->config($input);
+        $config = $this->config($input, $output);
         $this->requireEnvironment($config, forDeploy: true);
         $this->warnIfPlainFtp($config, $output);
 
         $tool = $this->findDeploymentTool($config);
         if ($tool === null) {
-            $output->writeln('<error>dg/ftp-deployment not found; run composer install or set pfdk_tool in the ini.</error>');
+            $output->writeln('<error>dg/ftp-deployment not found; run composer install in the folder where pfdk is installed.</error>');
 
             return self::FAILURE;
         }
 
         if ($input->getOption('pull') && !$this->runProcess(['git', 'pull', '--ff-only'], $output)) {
+            return self::FAILURE;
+        }
+
+        if ($this->shouldMigrateFirst($config, $input, $output) && !$this->migrate($config, $input, $output)) {
             return self::FAILURE;
         }
 
@@ -48,17 +54,35 @@ final class DeployCommand extends BaseCommand
         return $this->runProcess($command, $output) ? self::SUCCESS : self::FAILURE;
     }
 
-    private function findDeploymentTool(DeployConfig $config): ?string
+    /** Only offered for Symfony projects with a database, and never for a dry run, which must not change anything. */
+    private function shouldMigrateFirst(DeployConfig $config, InputInterface $input, OutputInterface $output): bool
     {
-        // An explicit pfdk_tool must not silently fall back to another binary.
-        if ($config->tool !== null) {
-            return is_file($config->tool) ? $config->tool : null;
+        if (!$input->isInteractive() || $input->getOption('dry') || $config->type !== 'symfony' || $config->db === null) {
+            return false;
         }
 
-        // The project's own vendor folder wins, so its pinned dg version is the one that deploys.
+        $question = new ConfirmationQuestion('Pull, migrate and push the database before deploying? [y/N] ', false);
+
+        return (bool) $this->getHelper('question')->ask($input, $output, $question);
+    }
+
+    private function migrate(DeployConfig $config, InputInterface $input, OutputInterface $output): bool
+    {
+        $arguments = ['--config' => $config->file];
+        if ($config->section !== null) {
+            $arguments['--section'] = $config->section;
+        }
+
+        return $this->getApplication()->find('db:migrate')->run($this->subInput($input, $arguments), $output) === self::SUCCESS;
+    }
+
+    private function findDeploymentTool(DeployConfig $config): ?string
+    {
+        // The project's own copy wins, so its pinned dg version is the one that deploys.
+        // Otherwise use the copy Composer installed next to pfdk, wherever that vendor folder is.
         $candidates = [
             $config->projectDir() . '/vendor/dg/ftp-deployment/deployment',
-            __DIR__ . '/../../vendor/dg/ftp-deployment/deployment',
+            (InstalledVersions::getInstallPath('dg/ftp-deployment') ?? '') . '/deployment',
         ];
 
         foreach ($candidates as $candidate) {

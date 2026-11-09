@@ -28,11 +28,10 @@ final class DeployConfigTest extends ProjectTestCase
 
     public function testLoadsPfdkSettingsFromIniFile(): void
     {
-        $config = $this->config("PFDK_DB = var/database.db\npfdk_backups = saved\npfdk_tool = bin/deployment\n");
+        $config = $this->config("PFDK_DB = var/database.db\npfdk_backups = saved\n");
 
         self::assertSame('var/database.db', $config->db);
         self::assertSame('saved', $config->backups);
-        self::assertSame('bin/deployment', $config->tool);
     }
 
     public function testBackupRotationAndSymfonySettings(): void

@@ -19,7 +19,7 @@ final class ExecCommand extends BaseCommand
 
     protected function execute(InputInterface $input, OutputInterface $output): int
     {
-        $config = $this->config($input);
+        $config = $this->config($input, $output);
         $command = implode(' ', $input->getArgument('command_line'));
 
         return $this->runInProject($config, $command, $output);

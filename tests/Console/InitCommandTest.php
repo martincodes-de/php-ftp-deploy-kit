@@ -19,6 +19,86 @@ final class InitCommandTest extends ProjectTestCase
         self::assertStringContainsString('static', $display);
     }
 
+    public function testAsksForThePresetWhenInteractive(): void
+    {
+        $tester = $this->init([], ['1']);
+
+        self::assertSame(0, $tester->getStatusCode());
+        self::assertStringContainsString('Which preset?', $tester->getDisplay());
+        self::assertFileExists("{$this->dir}/deploy.ini.example");
+    }
+
+    public function testCreatesTheWorkingIniButKeepsAnExistingOne(): void
+    {
+        $this->init(['preset' => 'static']);
+        self::assertFileEquals("{$this->dir}/deploy.ini.example", "{$this->dir}/deploy.ini");
+
+        file_put_contents("{$this->dir}/deploy.ini", 'my connection');
+        $this->init(['preset' => 'static']);
+        self::assertSame('my connection', file_get_contents("{$this->dir}/deploy.ini"));
+    }
+
+    public function testAddsTheGitignoreBlockOnceWhenInsideAGitProject(): void
+    {
+        mkdir("{$this->dir}/.git");
+        file_put_contents("{$this->dir}/.gitignore", "/vendor/\n");
+        $this->workFolder('ftp-deployment');
+
+        $this->initFrom(null, ['preset' => 'static']);
+        $this->initFrom(null, ['preset' => 'static']);
+
+        $gitignore = (string) file_get_contents("{$this->dir}/.gitignore");
+        self::assertSame(1, substr_count($gitignore, '###> pfdk ###'));
+        self::assertStringStartsWith("/vendor/\n\n###> pfdk ###\n/ftp-deployment/deploy.ini\n", $gitignore);
+        self::assertStringContainsString("/ftp-deployment/backups/\n/ftp-deployment/deploy.log\n/ftp-deployment/vendor/\n", $gitignore);
+    }
+
+    public function testIgnoresAtTheRootWhenInitRunsInTheGitProjectItself(): void
+    {
+        mkdir("{$this->dir}/.git");
+
+        $this->init(['preset' => 'static']);
+
+        self::assertSame("###> pfdk ###\n/deploy.ini\n/backups/\n/deploy.log\n/vendor/\n###< pfdk ###\n", file_get_contents("{$this->dir}/.gitignore"));
+    }
+
+    public function testPrintsTheGitignoreLinesWithoutAGitProject(): void
+    {
+        $this->workFolder('ftp-deployment');
+
+        $display = $this->initFrom(null, ['preset' => 'static'])->getDisplay();
+
+        self::assertStringContainsString('Add this to your .gitignore', $display);
+        self::assertFileDoesNotExist("{$this->dir}/.gitignore");
+    }
+
+    public function testInstallsAPresetFromAFolderPath(): void
+    {
+        $custom = "{$this->dir}/my-presets/wordpress";
+        mkdir($custom, 0777, true);
+        file_put_contents("$custom/deploy.ini.example", "remote = \"ftps://USER:PASSWORD@HOST/PATH\"\n");
+        $work = $this->workFolder('work');
+
+        $tester = $this->initFrom(null, ['preset' => $custom]);
+
+        self::assertSame(0, $tester->getStatusCode());
+        self::assertFileExists("$work/deploy.ini");
+    }
+
+    public function testCustomPresetCanExtendABundledPreset(): void
+    {
+        $custom = "{$this->dir}/my-presets/laravel";
+        mkdir($custom, 0777, true);
+        file_put_contents("$custom/extends", 'symfony');
+        file_put_contents("$custom/before-build.snippet", "; custom build step\n");
+        $work = $this->workFolder('work');
+
+        $this->initFrom(null, ['preset' => $custom]);
+
+        self::assertStringContainsString('; custom build step', (string) file_get_contents("$work/deploy.ini.example"));
+        self::assertFileExists("$work/env-prod-flag");
+    }
+
     public function testCopiesPresetFilesIntoTheCurrentFolder(): void
     {
         $tester = $this->init(['preset' => 'symfony-sqlite']);
@@ -180,7 +260,7 @@ final class InitCommandTest extends ProjectTestCase
     public static function invalidNames(): iterable
     {
         yield 'unknown' => ['nope'];
-        yield 'path traversal' => ['../src'];
+        yield 'missing folder' => ['./does-not-exist'];
     }
 
     #[DataProvider('presetNames')]
@@ -223,17 +303,24 @@ final class InitCommandTest extends ProjectTestCase
         }
     }
 
-    /** @param array<string,mixed> $arguments */
-    private function init(array $arguments): CommandTester
+    /**
+     * @param array<string,mixed> $arguments
+     * @param list<string>        $inputs
+     */
+    private function init(array $arguments, array $inputs = []): CommandTester
     {
-        return $this->initFrom(null, $arguments);
+        return $this->initFrom(null, $arguments, $inputs);
     }
 
-    /** @param array<string,mixed> $arguments */
-    private function initFrom(?string $presetsDir, array $arguments): CommandTester
+    /**
+     * @param array<string,mixed> $arguments
+     * @param list<string>        $inputs
+     */
+    private function initFrom(?string $presetsDir, array $arguments, array $inputs = []): CommandTester
     {
         $tester = new CommandTester(ApplicationFactory::create(null, $presetsDir)->find('init'));
-        $tester->execute($arguments);
+        $tester->setInputs($inputs);
+        $tester->execute($arguments, ['interactive' => $inputs !== []]);
 
         return $tester;
     }

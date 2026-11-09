@@ -3,15 +3,20 @@ declare(strict_types=1);
 
 namespace Pfdk\Console;
 
+use Pfdk\Config\ConfigLocator;
 use Pfdk\Config\DeployConfig;
+use Pfdk\Config\SectionRequired;
 use Pfdk\Environment\Ddev;
 use Pfdk\Environment\Requirements;
 use Pfdk\Remote\CurlRemoteFiles;
 use Pfdk\Remote\RemoteFiles;
 use Symfony\Component\Console\Command\Command;
+use Symfony\Component\Console\Input\ArrayInput;
 use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Input\InputOption;
+use Symfony\Component\Console\Input\StreamableInputInterface;
 use Symfony\Component\Console\Output\OutputInterface;
+use Symfony\Component\Console\Question\ChoiceQuestion;
 use Symfony\Component\Process\Process;
 
 abstract class BaseCommand extends Command
@@ -28,16 +33,67 @@ abstract class BaseCommand extends Command
 
     protected function configure(): void
     {
-        $this->addOption('config', 'c', InputOption::VALUE_REQUIRED, 'Path to deploy.ini', 'deploy.ini');
+        $this->addOption('config', 'c', InputOption::VALUE_REQUIRED, 'Path to the deploy ini (default: found automatically)');
         $this->addOption('section', 's', InputOption::VALUE_REQUIRED, 'Deploy target, if the ini has several sections');
     }
 
-    protected function config(InputInterface $input): DeployConfig
+    protected function config(InputInterface $input, OutputInterface $output): DeployConfig
     {
-        $path = (string) $input->getOption('config');
-        $section = $input->getOption('section');
+        $file = $this->configFile($input, $output);
 
-        return DeployConfig::load(preg_match('~^(/|[A-Za-z]:)~', $path) === 1 ? $path : getcwd() . '/' . $path, $section);
+        try {
+            return DeployConfig::load($file, $input->getOption('section'));
+        } catch (SectionRequired $e) {
+            if (!$input->isInteractive()) {
+                throw $e;
+            }
+
+            return DeployConfig::load($file, $this->choose($input, $output, 'Which target?', $e->sections));
+        }
+    }
+
+    private function configFile(InputInterface $input, OutputInterface $output): string
+    {
+        $folder = (string) getcwd();
+        $path = $input->getOption('config');
+        if ($path !== null) {
+            return preg_match('~^(/|[A-Za-z]:)~', $path) === 1 ? $path : "$folder/$path";
+        }
+
+        $candidates = ConfigLocator::candidates($folder);
+        $relative = array_map(static fn (string $file): string => substr($file, strlen($folder) + 1), $candidates);
+
+        if ($candidates === []) {
+            return "$folder/deploy.ini";
+        }
+        if (count($candidates) === 1) {
+            $relative[0] === 'deploy.ini' || $output->writeln("Using {$relative[0]}");
+
+            return $candidates[0];
+        }
+        if (!$input->isInteractive()) {
+            throw new \RuntimeException("Several ini files found; pick one with --config:\n" . implode("\n", $relative));
+        }
+
+        return "$folder/" . $this->choose($input, $output, 'Which ini?', $relative);
+    }
+
+    /** @param list<string> $options */
+    private function choose(InputInterface $input, OutputInterface $output, string $question, array $options): string
+    {
+        return $this->getHelper('question')->ask($input, $output, new ChoiceQuestion($question, $options));
+    }
+
+    /** @param array<string,mixed> $arguments */
+    protected function subInput(InputInterface $parent, array $arguments): ArrayInput
+    {
+        $input = new ArrayInput($arguments);
+        $input->setInteractive($parent->isInteractive());
+        if ($parent instanceof StreamableInputInterface) {
+            $input->setStream($parent->getStream());
+        }
+
+        return $input;
     }
 
     protected function remote(DeployConfig $config, OutputInterface $output): RemoteFiles
@@ -76,7 +132,7 @@ abstract class BaseCommand extends Command
     {
         $problems = Requirements::fromRuntime()->problems($config->scheme, $forDeploy);
         if ($problems !== []) {
-            throw new \RuntimeException(implode("\n", $problems) . "\nRun `pfdk check` to see what this PHP supports.");
+            throw new \RuntimeException(implode("\n", $problems));
         }
     }
 

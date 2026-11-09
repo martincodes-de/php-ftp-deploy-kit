@@ -4,10 +4,8 @@ declare(strict_types=1);
 namespace Pfdk\Console;
 
 use Symfony\Component\Console\Attribute\AsCommand;
-use Symfony\Component\Console\Input\ArrayInput;
 use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Input\InputOption;
-use Symfony\Component\Console\Input\StreamableInputInterface;
 use Symfony\Component\Console\Output\OutputInterface;
 
 #[AsCommand('db:migrate', 'Symfony: pull the live database, run the migrations locally, push it back')]
@@ -23,14 +21,15 @@ final class MigrateCommand extends BaseCommand
 
     protected function execute(InputInterface $input, OutputInterface $output): int
     {
-        $config = $this->config($input);
+        $config = $this->config($input, $output);
         if ($config->type !== 'symfony') {
             $output->writeln('<error>db:migrate needs pfdk_type = symfony in the ini.</error>');
 
             return self::FAILURE;
         }
 
-        $arguments = ['--config' => $input->getOption('config')];
+        // The resolved file and section, so the sub-commands never ask or discover again.
+        $arguments = ['--config' => $config->file];
         if ($config->section !== null) {
             $arguments['--section'] = $config->section;
         }
@@ -54,17 +53,5 @@ final class MigrateCommand extends BaseCommand
         }
 
         return $this->getApplication()->find('db:push')->run($this->subInput($input, $arguments), $output);
-    }
-
-    /** @param array<string,mixed> $arguments */
-    private function subInput(InputInterface $parent, array $arguments): ArrayInput
-    {
-        $input = new ArrayInput($arguments);
-        $input->setInteractive($parent->isInteractive());
-        if ($parent instanceof StreamableInputInterface) {
-            $input->setStream($parent->getStream());
-        }
-
-        return $input;
     }
 }

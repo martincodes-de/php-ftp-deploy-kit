@@ -46,16 +46,8 @@ final class RequirementsTest extends TestCase
         self::assertSame([], $withoutSsh2->problems('sftp', forDeploy: false));
     }
 
-    public function testDescribesTheRuntime(): void
-    {
-        $description = (new Requirements(['ftp', 'sftp'], true, ['ssh2']))->describe();
-
-        self::assertSame('ftp sftp', $description['curl protocols']);
-        self::assertSame(['yes', 'no'], [$description['ext-ssh2'], $description['ext-openssl']]);
-    }
-
     public function testRuntimeFactoryReflectsThisPhp(): void
     {
-        self::assertContains('ftp', explode(' ', Requirements::fromRuntime()->describe()['curl protocols']));
+        self::assertSame([], Requirements::fromRuntime()->problems('ftp', forDeploy: false));
     }
 }

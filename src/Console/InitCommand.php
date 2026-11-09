@@ -9,8 +9,9 @@ use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Input\InputArgument;
 use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Output\OutputInterface;
+use Symfony\Component\Console\Question\ChoiceQuestion;
 
-#[AsCommand('init', 'Copy a preset (deploy.ini.example and helper files) into the current folder')]
+#[AsCommand('init', 'Set up a deployment: copy a preset, create deploy.ini and ignore it in git')]
 final class InitCommand extends BaseCommand
 {
     private readonly string $presetsDir;
@@ -24,21 +25,18 @@ final class InitCommand extends BaseCommand
 
     protected function configure(): void
     {
-        $this->addArgument('preset', InputArgument::OPTIONAL, 'Preset name; omit to list the available ones');
+        $this->addArgument('preset', InputArgument::OPTIONAL, 'Preset name or path to your own preset folder; omit to choose');
     }
 
     protected function execute(InputInterface $input, OutputInterface $output): int
     {
-        $preset = $input->getArgument('preset');
-
+        $preset = $input->getArgument('preset') ?? $this->askForPreset($input, $output);
         if ($preset === null) {
-            $output->writeln(array_map('basename', glob($this->presetsDir . '/*', GLOB_ONLYDIR)));
-
             return self::SUCCESS;
         }
 
         try {
-            $files = $this->presetFiles($preset);
+            $files = $this->presetFiles($this->presetDir($preset));
         } catch (\InvalidArgumentException $e) {
             $output->writeln("<error>{$e->getMessage()} Run `pfdk init` to list the presets.</error>");
 
@@ -56,30 +54,62 @@ final class InitCommand extends BaseCommand
             file_put_contents($name, preg_replace('~^; @pfdk:[a-z0-9-]+[ \t]*\r?\n~m', '', $content));
             $output->writeln("created: $name");
         }
-        $output->writeln('Next: copy deploy.ini.example to deploy.ini (gitignored) and fill in the connection.');
+
+        if (is_file('deploy.ini.example') && !is_file('deploy.ini')) {
+            copy('deploy.ini.example', 'deploy.ini');
+            $output->writeln('created: deploy.ini (gitignored, put your connection in here)');
+        }
+        $this->ignoreInGit($output);
+        $output->writeln('Next: edit deploy.ini, then run `pfdk deploy --dry`.');
 
         return self::SUCCESS;
+    }
+
+    private function askForPreset(InputInterface $input, OutputInterface $output): ?string
+    {
+        $presets = array_map('basename', glob($this->presetsDir . '/*', GLOB_ONLYDIR));
+        if (!$input->isInteractive()) {
+            $output->writeln($presets);
+
+            return null;
+        }
+
+        return $this->getHelper('question')->ask($input, $output, new ChoiceQuestion('Which preset?', $presets));
+    }
+
+    /** A path is your own preset folder, a plain name is one of the bundled presets. */
+    private function presetDir(string $preset, ?string $relativeTo = null): string
+    {
+        $dir = false;
+        if (str_contains($preset, '/') || str_contains($preset, '\\')) {
+            $isAbsolute = preg_match('~^(/|[A-Za-z]:)~', $preset) === 1;
+            $dir = realpath($isAbsolute || $relativeTo === null ? $preset : "$relativeTo/$preset");
+        } elseif (preg_match('/^[a-z0-9-]+$/', $preset) === 1) {
+            $dir = realpath($this->presetsDir . "/$preset");
+        }
+
+        return $dir !== false && is_dir($dir) ? $dir : throw new \InvalidArgumentException("Unknown preset '$preset'.");
     }
 
     /**
      * Files of a preset: its base preset first (`extends`), then its own files, with `<marker>.snippet`
      * files replacing the matching `; @pfdk:<marker>` lines of the base.
      *
-     * @param list<string> $chain presets already being resolved, to stop cycles
+     * @param list<string> $chain preset folders already being resolved, to stop cycles
      *
      * @return array<string,string> file name => content
      */
-    private function presetFiles(string $name, array $chain = []): array
+    private function presetFiles(string $dir, array $chain = []): array
     {
-        // Plain names only, so a preset can't point outside the presets folder.
-        if (preg_match('/^[a-z0-9-]+$/', $name) !== 1 || !is_dir($dir = $this->presetsDir . "/$name")) {
-            throw new \InvalidArgumentException("Unknown preset '$name'.");
-        }
-        if (in_array($name, $chain, true)) {
-            throw new \InvalidArgumentException("Preset '$name' extends itself (" . implode(' -> ', [...$chain, $name]) . ').');
+        if (in_array($dir, $chain, true)) {
+            throw new \InvalidArgumentException("Preset '" . basename($dir) . "' extends itself (" . implode(' -> ', array_map('basename', [...$chain, $dir])) . ').');
         }
 
-        $files = is_file("$dir/extends") ? $this->presetFiles(trim((string) file_get_contents("$dir/extends")), [...$chain, $name]) : [];
+        $files = [];
+        if (is_file("$dir/extends")) {
+            $base = $this->presetDir(trim((string) file_get_contents("$dir/extends")), $dir);
+            $files = $this->presetFiles($base, [...$chain, $dir]);
+        }
 
         foreach (glob("$dir/*") as $path) {
             $file = basename($path);
@@ -95,5 +125,29 @@ final class InitCommand extends BaseCommand
         }
 
         return $files;
+    }
+
+    private function ignoreInGit(OutputInterface $output): void
+    {
+        $here = (string) getcwd();
+        // Usually pfdk lives in a subfolder of the project; if this folder is the git project itself, ignore at its root.
+        $project = file_exists("$here/.git") ? $here : dirname($here);
+        $prefix = $project === $here ? '' : '/' . basename($here);
+        $block = "###> pfdk ###\n$prefix/deploy.ini\n$prefix/backups/\n$prefix/deploy.log\n$prefix/vendor/\n###< pfdk ###\n";
+
+        if (!file_exists("$project/.git")) {
+            $output->writeln("Add this to your .gitignore:\n$block");
+
+            return;
+        }
+
+        $gitignore = "$project/.gitignore";
+        $existing = is_file($gitignore) ? (string) file_get_contents($gitignore) : '';
+        if (str_contains($existing, '###> pfdk ###')) {
+            return;
+        }
+
+        file_put_contents($gitignore, ($existing === '' ? '' : rtrim($existing, "\r\n") . "\n\n") . $block);
+        $output->writeln('updated: ' . ($project === $here ? '' : '../') . '.gitignore');
     }
 }

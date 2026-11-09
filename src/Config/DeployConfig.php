@@ -15,7 +15,6 @@ final class DeployConfig
         public readonly string $remotePath,
         public readonly ?string $db,
         public readonly string $backups,
-        public readonly ?string $tool,
         public readonly string $local = '.',
         public readonly int $backupsKeep = 10,
         public readonly ?string $type = null,
@@ -57,7 +56,6 @@ final class DeployConfig
             trim($parts['path'] ?? '', '/'),
             isset($values['pfdk_db']) ? trim(self::unquote((string) $values['pfdk_db']), '/') : null,
             self::unquote((string) ($values['pfdk_backups'] ?? 'backups')),
-            isset($values['pfdk_tool']) ? self::unquote((string) $values['pfdk_tool']) : null,
             self::unquote((string) ($values['local'] ?? '.')),
             self::backupsKeep($values['pfdk_backups_keep'] ?? 10),
             isset($values['pfdk_type']) ? strtolower(self::unquote((string) $values['pfdk_type'])) : null,
@@ -90,12 +88,11 @@ final class DeployConfig
             return $top;
         }
 
-        $names = implode(', ', array_keys($sections));
         if ($section === null) {
-            throw new \RuntimeException("This ini has several targets; pick one with --section: $names");
+            throw new SectionRequired(array_keys($sections));
         }
         if (!isset($sections[$section])) {
-            throw new \RuntimeException("Unknown section '$section'. Available: $names");
+            throw new \RuntimeException("Unknown section '$section'. Available: " . implode(', ', array_keys($sections)));
         }
 
         return array_change_key_case($sections[$section], CASE_LOWER) + $top;

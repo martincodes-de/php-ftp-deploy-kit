@@ -61,20 +61,6 @@ final class Requirements
         return $problems;
     }
 
-    /** @return array<string,string> */
-    public function describe(): array
-    {
-        $yesNo = static fn (bool $value): string => $value ? 'yes' : 'no';
-
-        return [
-            'PHP' => PHP_VERSION,
-            'curl protocols' => implode(' ', $this->curlProtocols),
-            'curl SSL' => $yesNo($this->curlSsl),
-            'ext-openssl' => $yesNo($this->hasExtension('openssl')),
-            'ext-ssh2' => $yesNo($this->hasExtension('ssh2')),
-        ];
-    }
-
     /** @param list<string> $problems */
     private function requireProtocol(array &$problems, string $protocol, string $label, string $hint = ''): void
     {

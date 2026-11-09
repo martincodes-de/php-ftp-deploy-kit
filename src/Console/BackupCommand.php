@@ -12,7 +12,7 @@ final class BackupCommand extends BaseCommand
 {
     protected function execute(InputInterface $input, OutputInterface $output): int
     {
-        $config = $this->config($input);
+        $config = $this->config($input, $output);
         $target = $config->backupFile("database-{$this->stamp()}.db");
 
         if (!$this->remote($config, $output)->download($config->requireDb(), $target)) {

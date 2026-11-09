@@ -46,6 +46,13 @@ commands; deploying the code works for any app, and a dump would need a shell or
   the signature). Where a comment is needed, keep it as short as possible and explain why, never what.
   Apply this to every new change and to code you touch.
 - Names: package `martincodes-de/php-ftp-deploy-kit`, binary `pfdk`.
+- Deliberately removed, do not re-add without asking: a `check` command (the protocol check runs automatically before
+  connecting) and a `pfdk_tool` ini key (dg is found via Composer's install path).
+- Interactive questions only where they replace an error (several inis, several sections, the optional migration
+  before a deploy, choosing a preset). No wizard or step checklist: that would be a second application.
+- `ftp://` is plain and `ftps://` is explicit TLS, exactly like dg. Never "fix" this to implicit TLS.
+- Other project types (Laravel, WordPress, ...) are added as presets (a folder, `extends`, snippets), not as code.
+  The author only needs Symfony, so only Symfony presets ship.
 
 ## Workflow: spec-driven development first
 
@@ -63,7 +70,7 @@ The point: the package is the safety net for production deployments and database
 here can destroy a live site's data.
 
 - Tests ship with the behavior they cover, in the same task.
-- Keep coverage high and meaningful (currently ~99 % of lines): happy path plus the failure paths that matter
+- Keep coverage high and meaningful (currently ~98 % of lines): happy path plus the failure paths that matter
   (missing remote file, empty download, aborted confirmation, invalid config).
 
 ## Development
@@ -84,4 +91,6 @@ OpenSpec needs Node >= 22.12: `npx -y -p node@22 -p @fission-ai/openspec openspe
 - Tests use real temp directories (`ProjectTestCase` also changes the working directory) and Symfony's `CommandTester`.
 - FTP is faked with `InMemoryRemoteFiles` for the commands; `CurlRemoteFiles` itself is tested against `file://localhost/...`,
   which curl handles like a server.
-- Not testable hermetically: `DeployCommand` finding no dg tool at all (the package's own vendor copy always exists in dev).
+- `DeployCommand` finds dg via Composer's install path (this was once broken for real installs because it looked
+  inside pfdk's own `vendor/`); `testFindsTheDgThatComposerInstalledWithPfdk` runs the real dg as a dry run into a folder.
+- Not testable hermetically: `DeployCommand` finding no dg at all, since dg is always installed in dev.
