@@ -26,7 +26,7 @@ php vendor/bin/pfdk init symfony-sqlite
 cp deploy.ini.example deploy.ini
 ```
 
-Add `ftp-deployment/deploy.ini`, `ftp-deployment/backups/` and `ftp-deployment/vendor/` to your `.gitignore`, and fill in `remote = "ftp://USER:PASSWORD@HOST/PATH"` (use `ftps://` or `sftp://` if the host supports it).
+Add `ftp-deployment/deploy.ini`, `ftp-deployment/backups/`, `ftp-deployment/deploy.log` and `ftp-deployment/vendor/` to your `.gitignore`, and fill in `remote = "ftp://USER:PASSWORD@HOST/PATH"` (use `ftps://` or `sftp://` if the host supports it).
 
 Run all commands from the project root:
 
