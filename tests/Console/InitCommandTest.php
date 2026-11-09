@@ -63,6 +63,46 @@ final class InitCommandTest extends ProjectTestCase
         self::assertStringNotContainsString('Folder your web server serves', $tester->getDisplay());
     }
 
+    public function testWithoutHtaccessLeavesOutFilesJobsAndIgnoreEntries(): void
+    {
+        $this->init(['preset' => 'symfony', '--without' => ['htaccess']]);
+        $ini = (string) file_get_contents("{$this->dir}/deploy.ini.example");
+
+        self::assertFileDoesNotExist("{$this->dir}/htaccess.root");
+        self::assertFileDoesNotExist("{$this->dir}/htaccess.public");
+        self::assertStringNotContainsString('htaccess', $ini);
+        self::assertStringNotContainsString('@pfdk', $ini);
+        self::assertStringContainsString("\t/.env.dev\n", $ini);
+        self::assertFileExists("{$this->dir}/env-prod-flag");
+        self::assertSame('HOST', DeployConfig::load("{$this->dir}/deploy.ini")->host);
+    }
+
+    public function testHtaccessIsIncludedByDefaultWithoutMarkerLines(): void
+    {
+        $this->init(['preset' => 'symfony-sqlite']);
+        $ini = (string) file_get_contents("{$this->dir}/deploy.ini.example");
+
+        self::assertFileExists("{$this->dir}/htaccess.root");
+        self::assertStringContainsString('htaccess.root .htaccess', $ini);
+        self::assertStringNotContainsString('@pfdk', $ini);
+    }
+
+    public function testSeveralFeaturesCanBeLeftOutAndUnknownOnesAreIgnored(): void
+    {
+        $presets = $this->makePresets(['p' => [
+            'f.ini' => "a\n; @pfdk:optional-start one\nB\n; @pfdk:optional-end one\nc\n; @pfdk:optional-start two\nD\n; @pfdk:optional-end two\ne\n",
+            'one.txt' => 'one',
+            'keep.txt' => 'keep',
+        ]]);
+        $work = $this->workFolder('work');
+
+        $this->initFrom($presets, ['preset' => 'p', '--without' => ['one', 'two', 'nothing']]);
+
+        self::assertSame("a\nc\ne\n", file_get_contents("$work/f.ini"));
+        self::assertFileDoesNotExist("$work/one.txt");
+        self::assertFileExists("$work/keep.txt");
+    }
+
     #[DataProvider('invalidPublicFolders')]
     public function testRejectsUnsafePublicFolders(string $folder): void
     {
