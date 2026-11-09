@@ -10,10 +10,12 @@ abstract class ProjectTestCase extends TestCase
 {
     protected string $dir;
     private string $originalDir;
+    private string $originalPath;
 
     protected function setUp(): void
     {
         $this->originalDir = getcwd();
+        $this->originalPath = (string) getenv('PATH');
         $this->dir = sys_get_temp_dir() . '/pfdk-' . bin2hex(random_bytes(4));
         mkdir($this->dir, 0777, true);
         chdir($this->dir);
@@ -22,7 +24,28 @@ abstract class ProjectTestCase extends TestCase
     protected function tearDown(): void
     {
         chdir($this->originalDir);
+        putenv('PATH=' . $this->originalPath);
         $this->removeDirectory($this->dir);
+    }
+
+    /** Puts a fake `ddev` first on PATH and marks the folder as a DDEV project; returns the log of its calls. */
+    protected function installFakeDdev(string $status = 'running'): string
+    {
+        $bin = "{$this->dir}/fakebin";
+        $log = "{$this->dir}/ddev.log";
+        mkdir($bin);
+        file_put_contents("$bin/ddev", <<<SH
+            #!/bin/sh
+            echo "ddev \$*" >> "$log"
+            if [ "\$1" = "describe" ]; then echo '{"raw":{"status":"$status"}}'; exit 0; fi
+            if [ "\$1" = "exec" ]; then shift; exec sh -c "\$*"; fi
+            SH);
+        chmod("$bin/ddev", 0755);
+        putenv("PATH=$bin:{$this->originalPath}");
+        is_dir("{$this->dir}/.ddev") || mkdir("{$this->dir}/.ddev");
+        file_put_contents("{$this->dir}/.ddev/config.yaml", "name: test\n");
+
+        return $log;
     }
 
     protected function writeIni(string $extra = "pfdk_db = var/database.db\n"): string

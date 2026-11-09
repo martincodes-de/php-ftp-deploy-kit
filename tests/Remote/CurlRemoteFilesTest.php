@@ -65,6 +65,19 @@ final class CurlRemoteFilesTest extends ProjectTestCase
         $this->remote()->upload("{$this->dir}/local.sqlite", 'no-such-dir/db.sqlite');
     }
 
+    public function testFtpsUsesExplicitTlsLikeDgInsteadOfCurlsImplicitFtps(): void
+    {
+        $url = $this->urlFor('ftps://u:p@host/app');
+
+        self::assertSame('ftp://host/app/db.sqlite', $url);
+    }
+
+    public function testOtherSchemesKeepTheirUrl(): void
+    {
+        self::assertSame('ftp://host/app/db.sqlite', $this->urlFor('ftp://u:p@host/app'));
+        self::assertSame('sftp://host/app/db.sqlite', $this->urlFor('sftp://u:p@host/app'));
+    }
+
     public function testConnectionErrorIsNotReportedAsMissingFile(): void
     {
         // Nothing listens on this port.
@@ -84,6 +97,11 @@ final class CurlRemoteFilesTest extends ProjectTestCase
         }
 
         self::assertFileDoesNotExist("{$this->dir}/db.sqlite");
+    }
+
+    private function urlFor(string $remote): string
+    {
+        return (new CurlRemoteFiles(DeployConfig::fromArray('deploy.ini', ['remote' => $remote])))->url('db.sqlite');
     }
 
     private function remote(): CurlRemoteFiles

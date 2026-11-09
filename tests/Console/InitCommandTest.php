@@ -113,6 +113,17 @@ final class InitCommandTest extends ProjectTestCase
         self::assertSame('HOST', DeployConfig::load("{$this->dir}/deploy.ini")->host);
     }
 
+    public function testSymfonyPresetBuildsThroughPfdkExecAndRecommendsTls(): void
+    {
+        $this->init(['preset' => 'symfony-sqlite']);
+        $raw = (string) file_get_contents("{$this->dir}/deploy.ini.example");
+
+        $folder = basename($this->dir);
+
+        self::assertStringContainsString("pfdk exec -c $folder/deploy.ini -- APP_ENV=prod composer install --no-dev", $raw);
+        self::assertStringContainsString('remote = "ftps://', $raw);
+    }
+
     public function testSymfonyPresetBacksUpBeforeRemovingDevDependencies(): void
     {
         $this->init(['preset' => 'symfony-sqlite']);

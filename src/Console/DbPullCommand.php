@@ -17,7 +17,7 @@ final class DbPullCommand extends BaseCommand
         $pulled = $config->backupFile("database-pulled-$stamp.db");
 
         // Download first: a failed pull must never touch the local database.
-        if (!$this->remote($config)->download($config->requireDb(), $pulled)) {
+        if (!$this->remote($config, $output)->download($config->requireDb(), $pulled)) {
             $output->writeln('<error>Download failed or the live database is empty; local database left untouched.</error>');
 
             return self::FAILURE;

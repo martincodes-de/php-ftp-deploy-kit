@@ -35,7 +35,22 @@ php vendor/bin/pfdk init symfony-sqlite
 cp deploy.ini.example deploy.ini
 ```
 
-Add `ftp-deployment/deploy.ini`, `ftp-deployment/backups/`, `ftp-deployment/deploy.log` and `ftp-deployment/vendor/` to your `.gitignore`, and fill in `remote = "ftp://USER:PASSWORD@HOST/PATH"` (use `ftps://` or `sftp://` if the host supports it).
+Add `ftp-deployment/deploy.ini`, `ftp-deployment/backups/`, `ftp-deployment/deploy.log` and `ftp-deployment/vendor/` to your `.gitignore`, and fill in `remote = "ftps://USER:PASSWORD@HOST/PATH"`.
+
+| Scheme | Meaning |
+| --- | --- |
+| `ftps://` | FTP over TLS (recommended) |
+| `ftp://` | Plain FTP: the password is sent unencrypted, `pfdk` warns about it. Use it only if the host offers nothing else. |
+| `sftp://` | SFTP: needs the `ssh2` PHP extension for the deployment and a curl built with libssh2 for the database commands |
+| `file:///path` | A local folder, handy for rehearsing a deploy |
+
+Check once after installing that this PHP can handle your protocol:
+
+```bash
+php ftp-deployment/vendor/bin/pfdk check -c ftp-deployment/deploy.ini
+```
+
+Every command that connects runs the same check first and stops with a clear message if something is missing.
 
 Run all commands from the project root:
 
@@ -57,10 +72,16 @@ The ini's `local` key (`..` in the preset) is the project folder. `pfdk_db` and 
 | `pfdk db:pull` | Replace the local database with the live one (local one is kept as `.bak-local-<time>`) |
 | `pfdk db:push [-y]` | Overwrite the live database with the local one (live one is saved in the backup folder first) |
 | `pfdk db:migrate [-y]` | Symfony only: pull the live database, run the Doctrine migrations locally, push it back |
+| `pfdk exec -- <command>` | Run a command in the project folder, through DDEV when it is running (used by the presets for `composer install`). The words are joined with spaces and run by a shell, so quotes you type in your own shell are already gone; quote inside the command if needed. |
+| `pfdk check` | Show what this PHP supports and whether your protocol works |
 
 All commands accept `-c path/to/deploy.ini` (default: `./deploy.ini`).
 
 A connection or login error always stops the command with a non-zero exit code, so a failing backup step aborts a deploy. A database that does not exist on the server yet is not an error (first deploy).
+
+### DDEV
+
+If the project folder contains `.ddev/config.yaml` and the DDEV project is running, `pfdk exec` and the default migration command of `db:migrate` run through `ddev exec` automatically; otherwise they run on your host. Set `pfdk_ddev = off` to always use the host. A `pfdk_migrate_command` you set yourself is run exactly as written.
 
 ### Migrations on FTP-only hosting
 
@@ -83,13 +104,14 @@ pfdk_backups = backups      ; where downloaded backups go (default: backups)
 pfdk_backups_keep = 10      ; keep the newest N backups, delete older database-*.db files (0 = keep all, default: 10)
 pfdk_tool = path/to/deployment  ; optional: use a specific dg/ftp-deployment binary
 pfdk_type = symfony         ; optional: enables db:migrate
-pfdk_migrate_command = ddev exec php bin/console doctrine:migrations:migrate --no-interaction
-                            ; optional: replaces the default `php bin/console doctrine:migrations:migrate --no-interaction`
+pfdk_migrate_command = php bin/console doctrine:migrations:migrate --no-interaction
+                            ; optional: replaces the default command and is run exactly as written
+pfdk_ddev = off             ; optional: never use DDEV, even if it is running (default: use it when it runs)
 ```
 
 ## Presets
 
-- `symfony-sqlite`: production composer install, DB backup before upload, `APP_ENV=prod` flag file, cache purge, dev dependencies restored afterwards.
+- `symfony-sqlite`: DB backup, production `composer install` (through DDEV when it runs), `APP_ENV=prod` flag file, cache purge, dev dependencies restored afterwards.
 - `static`: upload a built folder.
 
 Presets are plain files in `presets/<name>/`; add a folder to add a preset.

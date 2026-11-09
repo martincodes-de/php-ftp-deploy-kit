@@ -61,16 +61,21 @@ final class CurlRemoteFiles implements RemoteFiles
         }
     }
 
+    /** dg's ftps:// is explicit TLS on the normal port; curl's own ftps:// would mean implicit TLS on port 990. */
+    public function url(string $remotePath): string
+    {
+        return preg_replace('~^ftps://~', 'ftp://', $this->config->remoteUrl($remotePath));
+    }
+
     private function curl(string $remotePath): \CurlHandle
     {
-        $curl = curl_init($this->config->remoteUrl($remotePath));
+        $curl = curl_init($this->url($remotePath));
         curl_setopt_array($curl, [
             CURLOPT_USERPWD => $this->config->user . ':' . $this->config->password,
             CURLOPT_FAILONERROR => true,
             CURLOPT_CONNECTTIMEOUT => 20,
         ]);
-        // Plain ftp:// would send the password in clear text, so TLS is mandatory.
-        if ($this->config->scheme === 'ftp') {
+        if ($this->config->scheme === 'ftps') {
             curl_setopt($curl, CURLOPT_USE_SSL, CURLUSESSL_ALL);
         }
 

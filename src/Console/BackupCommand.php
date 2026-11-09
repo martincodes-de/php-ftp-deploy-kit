@@ -15,7 +15,7 @@ final class BackupCommand extends BaseCommand
         $config = $this->config($input);
         $target = $config->backupFile("database-{$this->stamp()}.db");
 
-        if (!$this->remote($config)->download($config->requireDb(), $target)) {
+        if (!$this->remote($config, $output)->download($config->requireDb(), $target)) {
             $output->writeln('<comment>No live database found; nothing backed up.</comment>');
 
             return self::SUCCESS;

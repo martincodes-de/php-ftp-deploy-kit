@@ -90,6 +90,51 @@ final class MigrateCommandTest extends ProjectTestCase
         self::assertSame("live\n", $this->remote->files[self::LIVE]);
     }
 
+    public function testDefaultMigrationRunsThroughDdevWhenItRuns(): void
+    {
+        $log = $this->installFakeDdev();
+        $this->writeIni("pfdk_db = var/database.db\npfdk_type = symfony\n");
+        $this->remote->files[self::LIVE] = 'live';
+        $this->writeFakeConsole('ddev-ran');
+
+        $tester = $this->migrate(['--yes' => true]);
+
+        self::assertSame(0, $tester->getStatusCode());
+        self::assertSame('ddev-ran', $this->remote->files[self::LIVE]);
+        self::assertStringContainsString('ddev exec php bin/console doctrine:migrations:migrate --no-interaction', (string) file_get_contents($log));
+    }
+
+    public function testExplicitMigrationCommandIsNeverWrappedInDdev(): void
+    {
+        $log = $this->installFakeDdev();
+        $this->iniWithMigration('echo explicit >> var/database.db');
+        $this->remote->files[self::LIVE] = "live\n";
+
+        $this->migrate(['--yes' => true]);
+
+        self::assertSame("live\nexplicit\n", $this->remote->files[self::LIVE]);
+        self::assertFileDoesNotExist($log);
+    }
+
+    public function testDdevCanBeSwitchedOffForMigrations(): void
+    {
+        $log = $this->installFakeDdev();
+        $this->writeIni("pfdk_db = var/database.db\npfdk_type = symfony\npfdk_ddev = off\n");
+        $this->remote->files[self::LIVE] = 'live';
+        $this->writeFakeConsole('host-ran');
+
+        $this->migrate(['--yes' => true]);
+
+        self::assertSame('host-ran', $this->remote->files[self::LIVE]);
+        self::assertFileDoesNotExist($log);
+    }
+
+    private function writeFakeConsole(string $writes): void
+    {
+        mkdir("{$this->dir}/bin");
+        file_put_contents("{$this->dir}/bin/console", "<?php\nfile_put_contents('var/database.db', '$writes');\n");
+    }
+
     private function iniWithMigration(string $command): void
     {
         $this->writeIni("pfdk_db = var/database.db\npfdk_type = symfony\npfdk_migrate_command = \"$command\"\n");

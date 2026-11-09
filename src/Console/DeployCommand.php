@@ -23,6 +23,8 @@ final class DeployCommand extends BaseCommand
     protected function execute(InputInterface $input, OutputInterface $output): int
     {
         $config = $this->config($input);
+        $this->requireEnvironment($config, forDeploy: true);
+        $this->warnIfPlainFtp($config, $output);
 
         $tool = $this->findDeploymentTool($config);
         if ($tool === null) {

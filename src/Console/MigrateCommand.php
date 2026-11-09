@@ -9,7 +9,6 @@ use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Input\InputOption;
 use Symfony\Component\Console\Input\StreamableInputInterface;
 use Symfony\Component\Console\Output\OutputInterface;
-use Symfony\Component\Process\Process;
 
 #[AsCommand('db:migrate', 'Symfony: pull the live database, run the migrations locally, push it back')]
 final class MigrateCommand extends BaseCommand
@@ -39,10 +38,9 @@ final class MigrateCommand extends BaseCommand
             return self::FAILURE;
         }
 
-        // A shell command so users can wrap it, e.g. `ddev exec php bin/console ...`.
-        $migration = Process::fromShellCommandline($config->migrateCommand ?? self::DEFAULT_MIGRATION, $config->projectDir(), null, null, null);
-        $migration->run(static fn (string $type, string $buffer) => $output->write($buffer));
-        if (!$migration->isSuccessful()) {
+        // A custom command is run exactly as written, so users stay in control of any wrapping.
+        $explicit = $config->migrateCommand !== null;
+        if ($this->runInProject($config, $config->migrateCommand ?? self::DEFAULT_MIGRATION, $output, viaDdev: !$explicit) !== 0) {
             $output->writeln('<error>Migration failed; the live database was not touched. The pulled copy is in the backup folder.</error>');
 
             return self::FAILURE;

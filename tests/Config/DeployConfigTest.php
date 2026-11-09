@@ -44,6 +44,14 @@ final class DeployConfigTest extends ProjectTestCase
         self::assertSame([3, 'symfony', 'ddev exec migrate'], [$custom->backupsKeep, $custom->type, $custom->migrateCommand]);
     }
 
+    public function testDdevIsOnByDefaultAndCanBeSwitchedOff(): void
+    {
+        self::assertTrue($this->config()->ddev);
+        self::assertTrue($this->config("pfdk_ddev = auto\n")->ddev);
+        self::assertFalse($this->config("pfdk_ddev = off\n")->ddev);
+        self::assertFalse($this->config("pfdk_ddev = false\n")->ddev);
+    }
+
     public function testNonNumericBackupLimitIsRejected(): void
     {
         $this->expectExceptionMessage('pfdk_backups_keep must be a number');
