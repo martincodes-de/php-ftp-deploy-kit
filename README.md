@@ -30,6 +30,17 @@ php ftp-deployment/vendor/bin/pfdk deploy
 | `sftp://` | Needs the `ssh2` PHP extension and curl built with libssh2 |
 | `file:///path` | A local folder, to rehearse a deploy |
 
+## First deploy, and when something goes wrong
+
+Before the first deploy of a Symfony app:
+
+1. Create `.env.prod.local` in the project root (git ignores it, the deploy uploads it) with the production secrets: `APP_SECRET` (for example `php -r 'echo bin2hex(random_bytes(16));'`) and your API keys.
+2. With SQLite: the deploy never uploads `var/`, so put your database on the server once with `pfdk db:push`.
+3. Build and upload run on your machine with your local PHP. If the host runs an older PHP, set `"config": {"platform": {"php": "8.2"}}` in the project's `composer.json`, so Composer installs packages that run there.
+4. Run `pfdk deploy --dry`, check the file list, then `pfdk deploy`.
+
+If a deploy stops midway, the `after[]` steps do not run and your local project stays in production mode. Restore it with `pfdk exec -- composer install` (and `pfdk exec -- rm -rf public/assets` if you compile assets). If data on the server is damaged, copy the newest file from the backup folder over your local database and run `pfdk db:push`.
+
 ## Commands
 
 | Command | What it does |
