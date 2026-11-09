@@ -7,6 +7,9 @@ use Pfdk\Config\DeployConfig;
 
 final class CurlRemoteFiles implements RemoteFiles
 {
+    /** PHP exposes no constants for these: FTP couldn't retrieve file (19), file couldn't be read (37), remote file not found (78). */
+    private const NOT_FOUND_ERRORS = [19, 37, 78];
+
     public function __construct(private readonly DeployConfig $config)
     {
     }
@@ -18,9 +21,17 @@ final class CurlRemoteFiles implements RemoteFiles
         $curl = $this->curl($remotePath);
         curl_setopt($curl, CURLOPT_FILE, $handle);
         $ok = curl_exec($curl) !== false;
+        $errno = curl_errno($curl);
+        $error = curl_error($curl);
         curl_close($curl);
         fclose($handle);
 
+        $notFound = in_array($errno, self::NOT_FOUND_ERRORS, true);
+        if (!$ok && !$notFound) {
+            @unlink($localFile);
+
+            throw new \RuntimeException("Download failed: $error");
+        }
         if (!$ok || filesize($localFile) === 0) {
             @unlink($localFile);
 

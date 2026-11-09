@@ -34,6 +34,8 @@ Run all commands from the project root:
 php ftp-deployment/vendor/bin/pfdk deploy --dry -c ftp-deployment/deploy.ini
 ```
 
+The folder name `ftp-deployment` is only a convention. `pfdk init` rewrites the paths in the preset to the name of the folder you run it in.
+
 The ini's `local` key (`..` in the preset) is the project folder. `pfdk_db` and a relative `pfdk_backups` are resolved against it.
 
 ## Commands
@@ -42,11 +44,25 @@ The ini's `local` key (`..` in the preset) is the project folder. `pfdk_db` and 
 | --- | --- |
 | `pfdk init [preset]` | List presets, or copy one into the current folder (never overwrites files) |
 | `pfdk deploy [--dry] [--pull]` | Run dg/ftp-deployment; `--dry` previews, `--pull` runs `git pull --ff-only` first |
-| `pfdk backup` | Download the live database into `backups/` |
+| `pfdk backup` | Download the live database into the backup folder |
 | `pfdk db:pull` | Replace the local database with the live one (local one is kept as `.bak-local-<time>`) |
-| `pfdk db:push [-y]` | Overwrite the live database with the local one (live one is saved in `backups/` first) |
+| `pfdk db:push [-y]` | Overwrite the live database with the local one (live one is saved in the backup folder first) |
+| `pfdk db:migrate [-y]` | Symfony only: pull the live database, run the Doctrine migrations locally, push it back |
 
 All commands accept `-c path/to/deploy.ini` (default: `./deploy.ini`).
+
+A connection or login error always stops the command with a non-zero exit code, so a failing backup step aborts a deploy. A database that does not exist on the server yet is not an error (first deploy).
+
+### Migrations on FTP-only hosting
+
+There is no remote shell, so migrations run on your machine against a copy of the live database. Enable it with `pfdk_type = symfony` and run it before deploying code that needs the new schema:
+
+```bash
+php ftp-deployment/vendor/bin/pfdk db:migrate -c ftp-deployment/deploy.ini
+php ftp-deployment/vendor/bin/pfdk deploy -c ftp-deployment/deploy.ini
+```
+
+If the pull or the migration fails, nothing is pushed and the live database stays untouched.
 
 ## Extra ini keys
 
@@ -55,7 +71,11 @@ dg/ftp-deployment ignores keys it does not know, so `pfdk` keeps its settings in
 ```ini
 pfdk_db = var/database.db   ; database file, relative to the project and to the remote root
 pfdk_backups = backups      ; where downloaded backups go (default: backups)
+pfdk_backups_keep = 10      ; keep the newest N backups, delete older database-*.db files (0 = keep all, default: 10)
 pfdk_tool = path/to/deployment  ; optional: use a specific dg/ftp-deployment binary
+pfdk_type = symfony         ; optional: enables db:migrate
+pfdk_migrate_command = ddev exec php bin/console doctrine:migrations:migrate --no-interaction
+                            ; optional: replaces the default `php bin/console doctrine:migrations:migrate --no-interaction`
 ```
 
 ## Presets

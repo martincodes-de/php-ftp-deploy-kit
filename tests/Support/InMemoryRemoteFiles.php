@@ -7,6 +7,8 @@ use Pfdk\Remote\RemoteFiles;
 
 final class InMemoryRemoteFiles implements RemoteFiles
 {
+    public bool $unreachable = false;
+
     /** @param array<string,string> $files */
     public function __construct(public array $files = [])
     {
@@ -14,6 +16,9 @@ final class InMemoryRemoteFiles implements RemoteFiles
 
     public function download(string $remotePath, string $localFile): bool
     {
+        if ($this->unreachable) {
+            throw new \RuntimeException('Download failed: connection refused');
+        }
         if (($this->files[$remotePath] ?? '') === '') {
             return false;
         }

@@ -116,6 +116,96 @@ final class DatabaseCommandsTest extends ProjectTestCase
         self::assertSame('live', $this->remote->files[self::LIVE]);
     }
 
+    public function testBackupRemovesOldestBackupsBeyondTheLimit(): void
+    {
+        $this->writeIni("pfdk_db = var/database.db\npfdk_backups_keep = 2\n");
+        $this->remote->files[self::LIVE] = 'live';
+        $this->seedBackups(['database-a.db' => 1000, 'database-b.db' => 2000, 'database-c.db' => 3000, 'database-d.db' => 4000]);
+
+        $tester = $this->execute('backup');
+
+        self::assertSame(2, count(glob("{$this->dir}/backups/database-*.db")));
+        self::assertFileExists("{$this->dir}/backups/database-d.db");
+        self::assertFileDoesNotExist("{$this->dir}/backups/database-a.db");
+        self::assertStringContainsString('Removed old backup: database-a.db', $tester->getDisplay());
+    }
+
+    public function testRotationCanBeDisabled(): void
+    {
+        $this->writeIni("pfdk_db = var/database.db\npfdk_backups_keep = 0\n");
+        $this->remote->files[self::LIVE] = 'live';
+        $this->seedBackups(['database-a.db' => 1000, 'database-b.db' => 2000]);
+
+        $this->execute('backup');
+
+        self::assertSame(3, count(glob("{$this->dir}/backups/database-*.db")));
+    }
+
+    public function testRotationLeavesForeignFilesAlone(): void
+    {
+        $this->writeIni("pfdk_db = var/database.db\npfdk_backups_keep = 1\n");
+        $this->remote->files[self::LIVE] = 'live';
+        $this->seedBackups(['database-a.db' => 1000, 'notes.txt' => 500]);
+
+        $this->execute('backup');
+
+        self::assertFileExists("{$this->dir}/backups/notes.txt");
+    }
+
+    public function testPullAndPushRotateToo(): void
+    {
+        $this->writeIni("pfdk_db = var/database.db\npfdk_backups_keep = 1\n");
+        $this->writeLocalDb('local');
+        $this->remote->files[self::LIVE] = 'live';
+        $this->seedBackups(['database-a.db' => 1000]);
+
+        $this->execute('db:pull');
+        self::assertFileDoesNotExist("{$this->dir}/backups/database-a.db");
+
+        $this->seedBackups(['database-b.db' => 1000]);
+        $this->execute('db:push', ['--yes' => true]);
+        self::assertFileDoesNotExist("{$this->dir}/backups/database-b.db");
+    }
+
+    public function testUnreachableServerAbortsBackup(): void
+    {
+        $this->remote->unreachable = true;
+
+        $this->expectExceptionMessage('connection refused');
+        $this->execute('backup');
+    }
+
+    public function testUnreachableServerLeavesLocalDatabaseUntouchedOnPull(): void
+    {
+        $local = $this->writeLocalDb('precious');
+        $this->remote->unreachable = true;
+
+        try {
+            $this->execute('db:pull');
+            self::fail('Expected the pull to abort');
+        } catch (\RuntimeException) {
+            self::assertSame('precious', file_get_contents($local));
+        }
+    }
+
+    public function testUnreachableServerAbortsPushBeforeUploading(): void
+    {
+        $this->writeLocalDb('local');
+        $this->remote->unreachable = true;
+
+        $this->expectExceptionMessage('connection refused');
+        $this->execute('db:push', ['--yes' => true]);
+    }
+
+    /** @param array<string,int> $filesWithModifiedTime */
+    private function seedBackups(array $filesWithModifiedTime): void
+    {
+        is_dir("{$this->dir}/backups") || mkdir("{$this->dir}/backups", 0777, true);
+        foreach ($filesWithModifiedTime as $name => $time) {
+            touch("{$this->dir}/backups/$name", $time);
+        }
+    }
+
     /**
      * @param array<string,mixed> $arguments
      * @param list<string>        $inputs

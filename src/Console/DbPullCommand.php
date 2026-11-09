@@ -32,6 +32,7 @@ final class DbPullCommand extends BaseCommand
         copy($pulled, $local);
 
         $output->writeln("Pulled live database into $local (copy: $pulled)");
+        $this->pruneBackups($config, $output);
 
         return self::SUCCESS;
     }

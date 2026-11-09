@@ -9,6 +9,7 @@ use Pfdk\Remote\RemoteFiles;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Input\InputOption;
+use Symfony\Component\Console\Output\OutputInterface;
 
 abstract class BaseCommand extends Command
 {
@@ -42,5 +43,21 @@ abstract class BaseCommand extends Command
     protected function stamp(): string
     {
         return date('Ymd-His');
+    }
+
+    protected function pruneBackups(DeployConfig $config, OutputInterface $output): void
+    {
+        if ($config->backupsKeep === 0) {
+            return;
+        }
+
+        // Only our own file names, so anything else a user keeps in that folder is safe.
+        $files = glob(dirname($config->backupFile('x')) . '/database-*.db') ?: [];
+        usort($files, fn (string $a, string $b) => filemtime($b) <=> filemtime($a) ?: strcmp($b, $a));
+
+        foreach (array_slice($files, $config->backupsKeep) as $old) {
+            unlink($old);
+            $output->writeln('Removed old backup: ' . basename($old));
+        }
     }
 }

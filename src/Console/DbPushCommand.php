@@ -42,6 +42,7 @@ final class DbPushCommand extends BaseCommand
 
         $remote->upload($local, $config->requireDb());
         $output->writeln('Local database pushed.');
+        $this->pruneBackups($config, $output);
 
         return self::SUCCESS;
     }

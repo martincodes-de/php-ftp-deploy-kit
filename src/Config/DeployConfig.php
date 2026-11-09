@@ -17,6 +17,9 @@ final class DeployConfig
         public readonly string $backups,
         public readonly ?string $tool,
         public readonly string $local = '.',
+        public readonly int $backupsKeep = 10,
+        public readonly ?string $type = null,
+        public readonly ?string $migrateCommand = null,
     ) {
     }
 
@@ -54,6 +57,9 @@ final class DeployConfig
             self::unquote((string) ($values['pfdk_backups'] ?? 'backups')),
             isset($values['pfdk_tool']) ? self::unquote((string) $values['pfdk_tool']) : null,
             self::unquote((string) ($values['local'] ?? '.')),
+            self::backupsKeep($values['pfdk_backups_keep'] ?? 10),
+            isset($values['pfdk_type']) ? strtolower(self::unquote((string) $values['pfdk_type'])) : null,
+            isset($values['pfdk_migrate_command']) ? self::unquote((string) $values['pfdk_migrate_command']) : null,
         );
     }
 
@@ -88,6 +94,16 @@ final class DeployConfig
         $absolute = preg_match('~^(/|[A-Za-z]:)~', $this->backups) === 1;
 
         return rtrim($absolute ? $this->backups : $this->projectDir() . '/' . $this->backups, '/') . '/' . $name;
+    }
+
+    private static function backupsKeep(mixed $value): int
+    {
+        // A typo must not silently turn rotation off.
+        if (!is_numeric($value)) {
+            throw new \RuntimeException('pfdk_backups_keep must be a number');
+        }
+
+        return max(0, (int) $value);
     }
 
     private static function unquote(string $value): string

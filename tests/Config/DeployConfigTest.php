@@ -35,6 +35,26 @@ final class DeployConfigTest extends ProjectTestCase
         self::assertSame('bin/deployment', $config->tool);
     }
 
+    public function testBackupRotationAndSymfonySettings(): void
+    {
+        $defaults = $this->config();
+        $custom = $this->config("pfdk_backups_keep = 3\npfdk_type = Symfony\npfdk_migrate_command = \"ddev exec migrate\"\n");
+
+        self::assertSame([10, null, null], [$defaults->backupsKeep, $defaults->type, $defaults->migrateCommand]);
+        self::assertSame([3, 'symfony', 'ddev exec migrate'], [$custom->backupsKeep, $custom->type, $custom->migrateCommand]);
+    }
+
+    public function testNonNumericBackupLimitIsRejected(): void
+    {
+        $this->expectExceptionMessage('pfdk_backups_keep must be a number');
+        $this->config("pfdk_backups_keep = ten\n");
+    }
+
+    public function testNegativeBackupLimitMeansKeepEverything(): void
+    {
+        self::assertSame(0, $this->config("pfdk_backups_keep = -5\n")->backupsKeep);
+    }
+
     public function testBackupsDefaultToFolderNextToTheIni(): void
     {
         $config = $this->config();

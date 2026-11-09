@@ -65,12 +65,25 @@ final class CurlRemoteFilesTest extends ProjectTestCase
         $this->remote()->upload("{$this->dir}/local.sqlite", 'no-such-dir/db.sqlite');
     }
 
-    public function testPlainFtpDemandsTlsSoPasswordsAreNeverSentInClearText(): void
+    public function testConnectionErrorIsNotReportedAsMissingFile(): void
     {
-        // Nothing listens on this port, so the call fails after the TLS option was applied.
+        // Nothing listens on this port.
         $config = DeployConfig::fromArray('deploy.ini', ['remote' => 'ftp://user:pw@127.0.0.1:1/app']);
 
-        self::assertFalse((new CurlRemoteFiles($config))->download('db.sqlite', "{$this->dir}/db.sqlite"));
+        $this->expectExceptionMessage('Download failed');
+        (new CurlRemoteFiles($config))->download('db.sqlite', "{$this->dir}/db.sqlite");
+    }
+
+    public function testFailedDownloadLeavesNoPartialFile(): void
+    {
+        $config = DeployConfig::fromArray('deploy.ini', ['remote' => 'ftp://user:pw@127.0.0.1:1/app']);
+
+        try {
+            (new CurlRemoteFiles($config))->download('db.sqlite', "{$this->dir}/db.sqlite");
+        } catch (\RuntimeException) {
+        }
+
+        self::assertFileDoesNotExist("{$this->dir}/db.sqlite");
     }
 
     private function remote(): CurlRemoteFiles

@@ -22,6 +22,7 @@ final class BackupCommand extends BaseCommand
         }
 
         $output->writeln("Backup saved: $target");
+        $this->pruneBackups($config, $output);
 
         return self::SUCCESS;
     }

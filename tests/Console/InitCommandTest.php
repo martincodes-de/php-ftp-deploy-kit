@@ -38,6 +38,56 @@ final class InitCommandTest extends ProjectTestCase
         self::assertSame('mine', file_get_contents("{$this->dir}/env-prod-flag"));
     }
 
+    public function testPresetPathsFollowTheFolderName(): void
+    {
+        mkdir("{$this->dir}/deploy");
+        chdir("{$this->dir}/deploy");
+
+        $this->init(['preset' => 'symfony-sqlite']);
+        $ini = (string) file_get_contents("{$this->dir}/deploy/deploy.ini.example");
+
+        self::assertStringContainsString('php deploy/vendor/bin/pfdk backup -c deploy/deploy.ini', $ini);
+        self::assertStringNotContainsString('ftp-deployment', $ini);
+    }
+
+    public function testToolNameIsNotRewritten(): void
+    {
+        $preset = __DIR__ . '/../../presets/tmp-tool-name';
+        mkdir($preset);
+        file_put_contents("$preset/a.ini", "; dg/ftp-deployment runs from ftp-deployment/\n");
+        mkdir("{$this->dir}/deploy");
+        chdir("{$this->dir}/deploy");
+
+        try {
+            $this->init(['preset' => 'tmp-tool-name']);
+        } finally {
+            unlink("$preset/a.ini");
+            rmdir($preset);
+        }
+
+        self::assertSame("; dg/ftp-deployment runs from deploy/\n", file_get_contents("{$this->dir}/deploy/a.ini"));
+    }
+
+    public function testConventionalFolderNameStaysUnchanged(): void
+    {
+        mkdir("{$this->dir}/ftp-deployment");
+        chdir("{$this->dir}/ftp-deployment");
+
+        $this->init(['preset' => 'symfony-sqlite']);
+
+        self::assertStringContainsString('php ftp-deployment/vendor/bin/pfdk backup', (string) file_get_contents("{$this->dir}/ftp-deployment/deploy.ini.example"));
+    }
+
+    public function testSymfonyPresetIgnoresTestCacheAndOffersTheSymfonyTypeAsComment(): void
+    {
+        $this->init(['preset' => 'symfony-sqlite']);
+        $raw = (string) file_get_contents("{$this->dir}/deploy.ini.example");
+
+        self::assertStringContainsString("\t.phpunit.result.cache", $raw);
+        self::assertStringContainsString('; pfdk_type = symfony', $raw);
+        self::assertArrayNotHasKey('pfdk_type', parse_ini_file("{$this->dir}/deploy.ini.example"));
+    }
+
     #[DataProvider('invalidNames')]
     public function testRejectsUnknownOrUnsafePresetNames(string $name): void
     {

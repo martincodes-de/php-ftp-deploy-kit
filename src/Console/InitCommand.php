@@ -43,7 +43,8 @@ final class InitCommand extends BaseCommand
                 $output->writeln("skipped (exists): $name");
                 continue;
             }
-            copy($source, $name);
+            // Not after "dg/": that is the name of the deployment tool, not our folder.
+            file_put_contents($name, preg_replace('~(?<!dg/)ftp-deployment~', basename((string) getcwd()), (string) file_get_contents($source)));
             $output->writeln("created: $name");
         }
         $output->writeln('Next: copy deploy.ini.example to deploy.ini (gitignored) and fill in the connection.');
