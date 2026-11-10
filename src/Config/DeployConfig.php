@@ -63,7 +63,7 @@ final class DeployConfig
             isset($values['pfdk_migrate_command']) ? self::unquote((string) $values['pfdk_migrate_command']) : null,
             self::ddevEnabled($values['pfdk_ddev'] ?? 'auto'),
             $section,
-            isset($values['pfdk_db_local']) ? trim(self::unquote((string) $values['pfdk_db_local']), '/') : null,
+            self::optionalPath($values['pfdk_db_local'] ?? null),
         );
     }
 
@@ -147,6 +147,13 @@ final class DeployConfig
         }
 
         return max(0, (int) $value);
+    }
+
+    private static function optionalPath(mixed $value): ?string
+    {
+        $path = trim(self::unquote((string) $value), '/');
+
+        return $path === '' ? null : $path;
     }
 
     private static function unquote(string $value): string

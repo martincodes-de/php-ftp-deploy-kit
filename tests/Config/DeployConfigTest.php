@@ -130,6 +130,16 @@ final class DeployConfigTest extends ProjectTestCase
         self::assertSame("{$this->dir}/var/data_dev.db", $config->localDbFile());
     }
 
+    public function testEmptyOrSlashOnlyLocalDatabaseCountsAsNotSet(): void
+    {
+        foreach (['', '"/"', '" "'] as $value) {
+            $config = $this->config("pfdk_db = var/data_prod.db\npfdk_db_local = $value\n");
+
+            self::assertNull($config->dbLocal, "value: $value");
+            self::assertSame("{$this->dir}/var/data_prod.db", $config->localDbFile());
+        }
+    }
+
     public function testDatabaseSettingIsRequiredForDatabaseCommands(): void
     {
         $this->expectExceptionMessage('pfdk_db');

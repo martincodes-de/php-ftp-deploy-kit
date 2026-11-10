@@ -14,3 +14,11 @@ The optional ini key `pfdk_db_local` SHALL name the local database file, relativ
 #### Scenario: key not set
 - **WHEN** only `pfdk_db` is set
 - **THEN** the same relative path is used locally and remotely
+
+#### Scenario: empty value
+- **WHEN** `pfdk_db_local` is empty or only `/`
+- **THEN** it counts as not set
+
+#### Scenario: migration did not change the local file
+- **WHEN** `db:migrate` finishes and the local file is unchanged
+- **THEN** nothing is pushed and a warning points at `DATABASE_URL`

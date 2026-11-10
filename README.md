@@ -64,7 +64,7 @@ Everything is in one `deploy.ini`, which dg reads too (dg ignores the `pfdk_*` k
 | Key | Meaning |
 | --- | --- |
 | `pfdk_db` | SQLite file, relative to the project and to the remote root. Enables the database commands |
-| `pfdk_db_local` | Optional local SQLite file when it differs from the live one (for example `var/data_dev.db` locally, `pfdk_db = var/data_prod.db` live). `db:pull` replaces it, `db:push` uploads it, `db:migrate` migrates it. Default: same path as `pfdk_db` |
+| `pfdk_db_local` | Optional local SQLite file when it differs from the live one (for example `var/data_dev.db` locally, `pfdk_db = var/data_prod.db` live). `db:pull` replaces it, `db:push` uploads it, `db:migrate` migrates it. Empty or `/` counts as not set. Default: same path as `pfdk_db` |
 | `pfdk_backups` | Folder for downloaded backups (default `backups`) |
 | `pfdk_backups_keep` | Keep the newest N backups, delete older ones (default 10, `0` keeps all) |
 | `pfdk_type = symfony` | Enables `db:migrate` |
@@ -72,6 +72,10 @@ Everything is in one `deploy.ini`, which dg reads too (dg ignores the `pfdk_*` k
 | `pfdk_ddev = off` | Never use DDEV (default: use it when it runs) |
 
 Steps like building assets or clearing caches are plain `before[]`/`after[]` jobs in the ini, see dg's documentation. The ini's `local` key (`..` in the presets) is the project folder; `pfdk_db` and relative paths are resolved against it. The folder name `ftp-deployment` is only a convention: `init` adapts the preset to the folder it runs in.
+
+### Separate local and live database files
+
+With `pfdk_db_local`, the app's local `DATABASE_URL` must point at that file, because `db:migrate` runs the migration through your app: `DATABASE_URL=sqlite:///%kernel.project_dir%/var/data_dev.db`. If the migration leaves `pfdk_db_local` unchanged, `db:migrate` warns and does not push, so an unmigrated copy never replaces the live database.
 
 **Several targets:** either one ini per target (`deploy.staging.ini`, `deploy.production.ini`), or one ini with sections `[staging]` and `[production]` and `--section production`. With sections, `pfdk` never guesses: it asks, or fails listing them. Give each target its own `pfdk_backups` folder.
 

@@ -156,6 +156,18 @@ final class DatabaseCommandsTest extends ProjectTestCase
         self::assertStringContainsString('var/data_dev.db', $tester->getDisplay());
     }
 
+    public function testPullFailsClearlyWhenTheLocalPathIsADirectory(): void
+    {
+        $this->remote->files[self::LIVE] = 'live';
+        mkdir("{$this->dir}/var/database.db", 0777, true);
+
+        $tester = $this->execute('db:pull');
+
+        self::assertSame(1, $tester->getStatusCode());
+        self::assertStringContainsString('Could not write', $tester->getDisplay());
+        self::assertStringNotContainsString('Pulled live database', $tester->getDisplay());
+    }
+
     public function testBackupRemovesOldestBackupsBeyondTheLimit(): void
     {
         $this->writeIni("pfdk_db = var/database.db\npfdk_backups_keep = 2\n");
