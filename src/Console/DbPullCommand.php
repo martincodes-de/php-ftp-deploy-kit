@@ -14,7 +14,7 @@ final class DbPullCommand extends BaseCommand
     {
         $config = $this->config($input, $output);
         $stamp = $this->stamp();
-        $pulled = $config->backupFile("database-pulled-$stamp.db");
+        $pulled = $config->backupFile("pfdk-database-pulled-$stamp.db");
 
         // Download first: a failed pull must never touch the local database.
         if (!$this->remote($config, $output)->download($config->requireDb(), $pulled)) {

@@ -147,9 +147,16 @@ abstract class BaseCommand extends Command
             return;
         }
 
-        // Only our own file names, so anything else a user keeps in that folder is safe.
-        $files = glob(dirname($config->backupFile('x')) . '/database-*.db') ?: [];
-        usort($files, fn (string $a, string $b) => filemtime($b) <=> filemtime($a) ?: strcmp($b, $a));
+        // Only the pfdk- prefixed names pfdk writes; backups a project keeps itself, or pfdk wrote before the prefix existed, are never deleted.
+        // Ordered by the stamp in the name, because file times change when backups are copied or restored.
+        $files = [];
+        foreach (glob(dirname($config->backupFile('x')) . '/pfdk-database-*.db') ?: [] as $file) {
+            if (is_file($file) && preg_match('/^pfdk-database-(?:pulled-|pre-push-)?(\d{8}-\d{6})\.db$/', basename($file), $match) === 1) {
+                $files[$file] = $match[1];
+            }
+        }
+        uksort($files, fn (string $a, string $b) => $files[$b] <=> $files[$a] ?: strcmp(basename($b), basename($a)));
+        $files = array_keys($files);
 
         foreach (array_slice($files, $config->backupsKeep) as $old) {
             unlink($old);

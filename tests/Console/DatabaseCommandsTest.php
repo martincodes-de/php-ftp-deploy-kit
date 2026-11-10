@@ -28,7 +28,7 @@ final class DatabaseCommandsTest extends ProjectTestCase
         $tester = $this->execute('backup');
 
         self::assertSame(0, $tester->getStatusCode());
-        self::assertSame('live', $this->onlyFile('backups/database-*.db'));
+        self::assertSame('live', $this->onlyFile('backups/pfdk-database-*.db'));
     }
 
     public function testBackupWithoutLiveDatabaseIsNotAnError(): void
@@ -49,7 +49,7 @@ final class DatabaseCommandsTest extends ProjectTestCase
         self::assertSame(0, $tester->getStatusCode());
         self::assertSame('live', file_get_contents($local));
         self::assertSame('old local', $this->onlyFile('var/database.db.bak-local-*'));
-        self::assertSame('live', $this->onlyFile('backups/database-pulled-*.db'));
+        self::assertSame('live', $this->onlyFile('backups/pfdk-database-pulled-*.db'));
     }
 
     public function testPullWorksWithoutExistingLocalDatabase(): void
@@ -81,7 +81,7 @@ final class DatabaseCommandsTest extends ProjectTestCase
         $tester = $this->execute('db:push', ['--yes' => true]);
 
         self::assertSame(0, $tester->getStatusCode());
-        self::assertSame('live', $this->onlyFile('backups/database-pre-push-*.db'));
+        self::assertSame('live', $this->onlyFile('backups/pfdk-database-pre-push-*.db'));
         self::assertSame('local', $this->remote->files[self::LIVE]);
     }
 
@@ -143,7 +143,7 @@ final class DatabaseCommandsTest extends ProjectTestCase
 
         self::assertSame(0, $tester->getStatusCode());
         self::assertSame('dev', $this->remote->files['var/data_prod.db']);
-        self::assertSame('live', $this->onlyFile('backups/database-pre-push-*.db'));
+        self::assertSame('live', $this->onlyFile('backups/pfdk-database-pre-push-*.db'));
     }
 
     public function testPushComplainsAboutTheMissingLocalFile(): void
@@ -172,36 +172,133 @@ final class DatabaseCommandsTest extends ProjectTestCase
     {
         $this->writeIni("pfdk_db = var/database.db\npfdk_backups_keep = 2\n");
         $this->remote->files[self::LIVE] = 'live';
-        $this->seedBackups(['database-a.db' => 1000, 'database-b.db' => 2000, 'database-c.db' => 3000, 'database-d.db' => 4000]);
+        $this->seedBackups(['pfdk-database-20240101-000001.db' => 1000, 'pfdk-database-20240101-000002.db' => 2000, 'pfdk-database-20240101-000003.db' => 3000, 'pfdk-database-20240101-000004.db' => 4000]);
 
         $tester = $this->execute('backup');
 
-        self::assertSame(2, count(glob("{$this->dir}/backups/database-*.db")));
-        self::assertFileExists("{$this->dir}/backups/database-d.db");
-        self::assertFileDoesNotExist("{$this->dir}/backups/database-a.db");
-        self::assertStringContainsString('Removed old backup: database-a.db', $tester->getDisplay());
+        self::assertSame(2, count(glob("{$this->dir}/backups/pfdk-database-*.db")));
+        self::assertFileExists("{$this->dir}/backups/pfdk-database-20240101-000004.db");
+        self::assertFileDoesNotExist("{$this->dir}/backups/pfdk-database-20240101-000001.db");
+        self::assertStringContainsString('Removed old backup: pfdk-database-20240101-000001.db', $tester->getDisplay());
     }
 
     public function testRotationCanBeDisabled(): void
     {
         $this->writeIni("pfdk_db = var/database.db\npfdk_backups_keep = 0\n");
         $this->remote->files[self::LIVE] = 'live';
-        $this->seedBackups(['database-a.db' => 1000, 'database-b.db' => 2000]);
+        $this->seedBackups(['pfdk-database-20240101-000001.db' => 1000, 'pfdk-database-20240101-000002.db' => 2000]);
 
         $this->execute('backup');
 
-        self::assertSame(3, count(glob("{$this->dir}/backups/database-*.db")));
+        self::assertSame(3, count(glob("{$this->dir}/backups/pfdk-database-*.db")));
     }
 
     public function testRotationLeavesForeignFilesAlone(): void
     {
         $this->writeIni("pfdk_db = var/database.db\npfdk_backups_keep = 1\n");
         $this->remote->files[self::LIVE] = 'live';
-        $this->seedBackups(['database-a.db' => 1000, 'notes.txt' => 500]);
+        $this->seedBackups(['pfdk-database-20240101-000001.db' => 1000, 'notes.txt' => 500]);
 
         $this->execute('backup');
 
         self::assertFileExists("{$this->dir}/backups/notes.txt");
+    }
+
+    public function testRotationOnlyDeletesPfdkPrefixedFiles(): void
+    {
+        $this->writeIni("pfdk_db = var/database.db\npfdk_backups_keep = 1\n");
+        $this->remote->files[self::LIVE] = 'live';
+        $foreign = ['database-20240101-000001.db', 'database-pulled-20240101-000001.db', 'database-pre-push-20240101-000001.db', 'database-pulled-manual.db', 'pfdk-database-manual.db', 'pfdk-database-20240101-000001.db.gz', 'my-pfdk-database-20240101-000001.db'];
+        $this->seedBackups(array_fill_keys($foreign, 1) + [
+            'pfdk-database-20240101-000001.db' => 1000,
+            'pfdk-database-pulled-20240101-000002.db' => 2000,
+            'pfdk-database-pre-push-20240101-000003.db' => 3000,
+        ]);
+
+        $tester = $this->execute('backup');
+
+        foreach ($foreign as $name) {
+            self::assertFileExists("{$this->dir}/backups/$name");
+        }
+        self::assertCount(1, glob("{$this->dir}/backups/pfdk-database-2*-*.db") ?: []);
+        self::assertFileDoesNotExist("{$this->dir}/backups/pfdk-database-20240101-000001.db");
+        self::assertFileDoesNotExist("{$this->dir}/backups/pfdk-database-pulled-20240101-000002.db");
+        self::assertFileDoesNotExist("{$this->dir}/backups/pfdk-database-pre-push-20240101-000003.db");
+        self::assertStringNotContainsString('manual', $tester->getDisplay());
+    }
+
+    public function testRotationKeepsTheNewestStampEvenWhenFileTimesDisagree(): void
+    {
+        $this->writeIni("pfdk_db = var/database.db\npfdk_backups_keep = 2\n");
+        $this->remote->files[self::LIVE] = 'live';
+        $this->seedBackups([
+            'pfdk-database-20240101-000003.db' => 1000,
+            'pfdk-database-20240101-000002.db' => 2000,
+            'pfdk-database-20240101-000001.db' => 3000,
+        ]);
+
+        $this->execute('backup');
+
+        self::assertFileDoesNotExist("{$this->dir}/backups/pfdk-database-20240101-000001.db");
+        self::assertFileDoesNotExist("{$this->dir}/backups/pfdk-database-20240101-000002.db");
+        self::assertFileExists("{$this->dir}/backups/pfdk-database-20240101-000003.db");
+    }
+
+    public function testEqualStampsAreOrderedByNameWhateverTheFileTimes(): void
+    {
+        $this->writeIni("pfdk_db = var/database.db\npfdk_backups_keep = 4\n");
+        $this->remote->files[self::LIVE] = 'live';
+        $same = 'pfdk-database-%s20240101-000001.db';
+        $this->seedBackups([sprintf($same, '') => 5, sprintf($same, 'pulled-') => 5, sprintf($same, 'pre-push-') => 5]);
+
+        $this->execute('backup');
+
+        self::assertCount(3, glob("{$this->dir}/backups/pfdk-database-*2024*.db"));
+        self::assertCount(4, glob("{$this->dir}/backups/pfdk-database-*.db"));
+
+        $this->writeIni("pfdk_db = var/database.db\npfdk_backups_keep = 3\n");
+        $this->execute('backup');
+
+        self::assertCount(3, glob("{$this->dir}/backups/pfdk-database-*.db"));
+        self::assertFileDoesNotExist("{$this->dir}/backups/pfdk-database-20240101-000001.db");
+    }
+
+    public function testRotationNeverTouchesDirectories(): void
+    {
+        $this->writeIni("pfdk_db = var/database.db\npfdk_backups_keep = 1\n");
+        $this->remote->files[self::LIVE] = 'live';
+        mkdir("{$this->dir}/backups/pfdk-database-20240101-000001.db", 0777, true);
+
+        $tester = $this->execute('backup');
+
+        self::assertDirectoryExists("{$this->dir}/backups/pfdk-database-20240101-000001.db");
+        self::assertStringNotContainsString('Removed', $tester->getDisplay());
+    }
+
+    public function testRotationWithKeepZeroDeletesNothingEvenWithPrefixedFiles(): void
+    {
+        $this->writeIni("pfdk_db = var/database.db\npfdk_backups_keep = 0\n");
+        $this->remote->files[self::LIVE] = 'live';
+        $this->seedBackups(['pfdk-database-20240101-000001.db' => 1000, 'pfdk-database-pulled-20240101-000002.db' => 2000]);
+
+        $this->execute('backup');
+
+        self::assertCount(3, glob("{$this->dir}/backups/pfdk-database-*.db"));
+    }
+
+    public function testAllThreeWritePathsUseThePfdkPrefix(): void
+    {
+        $this->writeLocalDb('local');
+        $this->remote->files[self::LIVE] = 'live';
+
+        $this->execute('backup');
+        $this->execute('db:pull');
+        $this->execute('db:push', ['--yes' => true]);
+
+        self::assertCount(1, glob("{$this->dir}/backups/pfdk-database-2*.db"));
+        self::assertCount(1, glob("{$this->dir}/backups/pfdk-database-pulled-2*.db"));
+        self::assertCount(1, glob("{$this->dir}/backups/pfdk-database-pre-push-2*.db"));
+        self::assertSame([], glob("{$this->dir}/backups/database-*.db"));
     }
 
     public function testPullAndPushRotateToo(): void
@@ -209,14 +306,14 @@ final class DatabaseCommandsTest extends ProjectTestCase
         $this->writeIni("pfdk_db = var/database.db\npfdk_backups_keep = 1\n");
         $this->writeLocalDb('local');
         $this->remote->files[self::LIVE] = 'live';
-        $this->seedBackups(['database-a.db' => 1000]);
+        $this->seedBackups(['pfdk-database-20240101-000001.db' => 1000]);
 
         $this->execute('db:pull');
-        self::assertFileDoesNotExist("{$this->dir}/backups/database-a.db");
+        self::assertFileDoesNotExist("{$this->dir}/backups/pfdk-database-20240101-000001.db");
 
-        $this->seedBackups(['database-b.db' => 1000]);
+        $this->seedBackups(['pfdk-database-20240101-000002.db' => 1000]);
         $this->execute('db:push', ['--yes' => true]);
-        self::assertFileDoesNotExist("{$this->dir}/backups/database-b.db");
+        self::assertFileDoesNotExist("{$this->dir}/backups/pfdk-database-20240101-000002.db");
     }
 
     public function testUnreachableServerAbortsBackup(): void
