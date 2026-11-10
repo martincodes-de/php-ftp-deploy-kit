@@ -39,7 +39,7 @@ Before the first deploy of a Symfony app:
 3. Build and upload run on your machine with your local PHP. If the host runs an older PHP, set `"config": {"platform": {"php": "8.2"}}` in the project's `composer.json`, so Composer installs packages that run there.
 4. Run `pfdk deploy --dry`, check the file list, then `pfdk deploy`.
 
-If a deploy stops midway, the `after[]` steps do not run and your local project stays in production mode. Restore it with `pfdk exec -- composer install` (and `pfdk exec -- rm -rf public/assets` if you compile assets). If data on the server is damaged, copy the newest file from the backup folder over your local database and run `pfdk db:push`.
+If a deploy stops midway, dg skips the `after[]` steps, but the `pfdk_finally[]` steps of the presets still run (restoring dev packages, removing compiled assets), so your local project is not left in production mode. If data on the server is damaged, copy the newest file from the backup folder over your local database and run `pfdk db:push`.
 
 ## Commands
 
@@ -67,6 +67,7 @@ Everything is in one `deploy.ini`, which dg reads too (dg ignores the `pfdk_*` k
 | `pfdk_db_local` | Optional local SQLite file when it differs from the live one (for example `var/data_dev.db` locally, `pfdk_db = var/data_prod.db` live). `db:pull` replaces it, `db:push` uploads it, `db:migrate` migrates it. Empty or `/` counts as not set. Default: same path as `pfdk_db` |
 | `pfdk_backups` | Folder for downloaded backups (default `backups`) |
 | `pfdk_backups_keep` | Keep the newest N pfdk backups (by the stamp in the file name), delete older ones (default 10, `0` keeps all). Only files pfdk wrote with its own `pfdk-database-` prefix (`pfdk-database-<stamp>.db`, `pfdk-database-pulled-<stamp>.db`, `pfdk-database-pre-push-<stamp>.db`) are ever deleted. Other files, including older pfdk backups named `database-*.db`, are never deleted; remove those yourself |
+| `pfdk_finally[]` | Local shell command run in the project folder after every `pfdk deploy` once dg was started, whether it succeeded, failed or ran with `--dry`. All steps run even if one fails; the deploy's own result still counts, and a failing step is reported and makes the command exit non-zero. It also runs when dg could not connect (the exit code cannot tell that apart from a failure after `before[]` ran), but not when pfdk stops before dg starts (failed `--pull` or migration). Ctrl-C and SIGTERM during dg are waited out so the steps still run; this needs the pcntl extension, otherwise an interrupted deploy skips them (run them by hand then). Use it to undo what `before[]` did locally (the Symfony presets restore dev packages with it) |
 | `pfdk_type = symfony` | Enables `db:migrate` |
 | `pfdk_migrate_command` | Replaces the default `php bin/console doctrine:migrations:migrate --no-interaction`; run exactly as written |
 | `pfdk_ddev = off` | Never use DDEV (default: use it when it runs) |

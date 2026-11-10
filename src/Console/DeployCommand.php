@@ -6,6 +6,7 @@ namespace Pfdk\Console;
 use Composer\InstalledVersions;
 use Pfdk\Config\DeployConfig;
 use Symfony\Component\Console\Attribute\AsCommand;
+use Symfony\Component\Console\Command\SignalableCommandInterface;
 use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Input\InputOption;
 use Symfony\Component\Console\Output\OutputInterface;
@@ -13,8 +14,10 @@ use Symfony\Component\Console\Question\ConfirmationQuestion;
 use Symfony\Component\Process\Process;
 
 #[AsCommand('deploy', 'Run dg/ftp-deployment with the deploy.ini; all steps live in its before[]/after[] jobs')]
-final class DeployCommand extends BaseCommand
+final class DeployCommand extends BaseCommand implements SignalableCommandInterface
 {
+    private ?Process $deployment = null;
+
     protected function configure(): void
     {
         parent::configure();
@@ -51,7 +54,28 @@ final class DeployCommand extends BaseCommand
             $command[] = '--test';
         }
 
-        return $this->runProcess($command, $output) ? self::SUCCESS : self::FAILURE;
+        try {
+            $deployed = $this->runProcess($command, $output, isDeployment: true);
+        } finally {
+            $cleaned = $this->runFinally($config, $output);
+        }
+
+        return $deployed && $cleaned ? self::SUCCESS : self::FAILURE;
+    }
+
+    /** Runs every step even if one fails; a dry run too, because dg runs before[] steps then as well. */
+    private function runFinally(DeployConfig $config, OutputInterface $output): bool
+    {
+        $allSucceeded = true;
+        foreach ($config->finally as $step) {
+            $output->writeln("<comment>pfdk_finally: $step</comment>");
+            if ($this->runInProject($config, $step, $output, viaDdev: false) !== 0) {
+                $output->writeln("<error>pfdk_finally step failed: $step</error>");
+                $allSucceeded = false;
+            }
+        }
+
+        return $allSucceeded;
     }
 
     /** Only offered for Symfony projects with a database, and never for a dry run, which must not change anything. */
@@ -95,12 +119,39 @@ final class DeployCommand extends BaseCommand
     }
 
     /** @param list<string> $command */
-    private function runProcess(array $command, OutputInterface $output): bool
+    private function runProcess(array $command, OutputInterface $output, bool $isDeployment = false): bool
     {
         // A deployment can outlive Process' default 60 s limit.
         $process = new Process($command, null, null, null, null);
-        $process->run(static fn (string $type, string $buffer) => $output->write($buffer));
+        $this->deployment = $isDeployment ? $process : null;
+        try {
+            $process->run(static fn (string $type, string $buffer) => $output->write($buffer));
+        } finally {
+            $this->deployment = null;
+        }
 
         return $process->isSuccessful();
+    }
+
+    /** Without pcntl nothing is subscribed, so an interrupted deploy then skips pfdk_finally[]. */
+    public function getSubscribedSignals(): array
+    {
+        return function_exists('pcntl_signal') ? [\SIGINT, \SIGTERM, \SIGHUP] : [];
+    }
+
+    /**
+     * While dg runs, pfdk keeps waiting for it so pfdk_finally[] still runs afterwards. The terminal already sent
+     * Ctrl-C to dg; other signals only reached pfdk, so they are passed on. In every other phase pfdk exits.
+     */
+    public function handleSignal(int $signal, int|false $previousExitCode = 0): int|false
+    {
+        if ($this->deployment === null) {
+            return 128 + $signal;
+        }
+        if ($signal !== \SIGINT) {
+            $this->deployment->signal($signal);
+        }
+
+        return false;
     }
 }

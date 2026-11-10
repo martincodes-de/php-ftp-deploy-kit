@@ -55,6 +55,7 @@ before[] = "upload: ftp-deployment/htaccess.public public/.htaccess"
 
 purge[] = "var/cache"
 
-after[] = "local: php ftp-deployment/vendor/bin/pfdk exec -c ftp-deployment/deploy.ini -- composer install"
+; Run by pfdk after dg returns, also after a failed deploy and after --dry, so the local project never stays in production mode.
+pfdk_finally[] = "php ftp-deployment/vendor/bin/pfdk exec -c ftp-deployment/deploy.ini -- composer install"
 ; Compiled assets must not stay locally, or the dev server would keep serving them.
-after[] = "local: php ftp-deployment/vendor/bin/pfdk exec -c ftp-deployment/deploy.ini -- rm -rf public/assets"
+pfdk_finally[] = "php ftp-deployment/vendor/bin/pfdk exec -c ftp-deployment/deploy.ini -- rm -rf public/assets"
