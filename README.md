@@ -1,14 +1,14 @@
 # PHP FTP Deploy Kit (`pfdk`)
 
-Set up a deployment for a PHP app on FTP-only hosting in a couple of minutes, and keep it up to date. A thin layer over [dg/ftp-deployment](https://github.com/dg/ftp-deployment): presets, a safe database pull/push for SQLite, and a few helpers. The deploying itself is done by dg.
+Deploy a PHP app to FTP-only hosting in a couple of minutes. A thin layer over [dg/ftp-deployment](https://github.com/dg/ftp-deployment): presets, safe SQLite pull/push and a few helpers. dg does the deploying.
 
-Right for classic shared hosts (bplaced and similar): no SSH, no Composer on the server. You build on your machine and upload the result. With SSH access, a tool that runs commands on the server (for example Deployer) fits better.
-
-Ready-made for **Symfony** (with or without SQLite). Other setups such as Laravel or WordPress are welcome as presets, see [CONTRIBUTING.md](CONTRIBUTING.md).
+- **For:** classic shared hosts (bplaced and similar), no SSH, no Composer on the server. You build locally and upload the result.
+- **Not for:** hosts with SSH. A tool that runs commands on the server (for example Deployer) fits better.
+- **Presets:** Symfony (with or without SQLite) and static. More are welcome, see [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## Quick start
 
-Needs PHP 8.2+ with `ext-curl`. Install pfdk in its own folder, so that `composer install --no-dev` during a deploy cannot remove it.
+Needs PHP 8.2+ with `ext-curl`. Install pfdk in its own folder, so `composer install --no-dev` during a deploy cannot remove it.
 
 ```bash
 mkdir ftp-deployment && cd ftp-deployment
@@ -16,7 +16,7 @@ composer require martincodes-de/php-ftp-deploy-kit
 php vendor/bin/pfdk init symfony          # or: symfony-sqlite, static
 ```
 
-`init` creates `deploy.ini` and ignores it in git. Put your connection into it (`remote = "ftps://USER:PASSWORD@HOST/PATH"`), then from the project root:
+`init` creates `deploy.ini` and ignores it in git. Put your connection into it (`remote = "ftps://USER:PASSWORD@HOST/PATH"`), then run from the project root:
 
 ```bash
 php ftp-deployment/vendor/bin/pfdk deploy --dry     # preview
@@ -26,63 +26,89 @@ php ftp-deployment/vendor/bin/pfdk deploy
 | Scheme | Meaning |
 | --- | --- |
 | `ftps://` | FTP over TLS (recommended) |
-| `ftp://` | Plain FTP, password unencrypted; `pfdk` warns |
+| `ftp://` | Plain FTP, password unencrypted; pfdk warns |
 | `sftp://` | Needs the `ssh2` PHP extension and curl built with libssh2 |
 | `file:///path` | A local folder, to rehearse a deploy |
 
-## First deploy, and when something goes wrong
+## First deploy (Symfony)
 
-Before the first deploy of a Symfony app:
-
-1. Create `.env.prod.local` in the project root (git ignores it, the deploy uploads it) with the production secrets: `APP_SECRET` (for example `php -r 'echo bin2hex(random_bytes(16));'`) and your API keys.
+1. Create `.env.prod.local` in the project root with the production secrets (`APP_SECRET`, API keys). Git ignores it, the deploy uploads it.
 2. With SQLite: the deploy never uploads `var/`, so put your database on the server once with `pfdk db:push`.
-3. Build and upload run on your machine with your local PHP. If the host runs an older PHP, set `"config": {"platform": {"php": "8.2"}}` in the project's `composer.json`, so Composer installs packages that run there.
+3. If the host runs an older PHP, set `"config": {"platform": {"php": "8.2"}}` in the project's `composer.json`.
 4. Run `pfdk deploy --dry`, check the file list, then `pfdk deploy`.
-
-If a deploy stops midway, dg skips the `after[]` steps, but the `pfdk_finally[]` steps of the presets still run (restoring dev packages, removing compiled assets), so your local project is not left in production mode. If data on the server is damaged, copy the newest file from the backup folder over your local database and run `pfdk db:push`.
 
 ## Commands
 
 | Command | What it does |
 | --- | --- |
 | `pfdk init [preset]` | Install a preset (asks if you give none) |
-| `pfdk deploy [--dry] [--pull]` | Run dg/ftp-deployment. For Symfony projects with a database it offers to migrate first |
+| `pfdk deploy [--dry] [--pull]` | Run dg. For Symfony projects with a database it offers to migrate first |
 | `pfdk backup` | Download the live database into the backup folder |
 | `pfdk db:pull` | Replace the local database with the live one (the local one is kept) |
 | `pfdk db:push [-y]` | Overwrite the live database with the local one (the live one is saved first) |
-| `pfdk db:migrate [-y]` | Symfony: pull the live database, run the Doctrine migrations locally, push it back |
+| `pfdk db:migrate [-y]` | Symfony: pull, run the Doctrine migrations locally, push back |
 | `pfdk exec -- <command>` | Run a command in the project, through DDEV when it runs |
 
-`-c <ini>` picks the ini; without it `pfdk` uses `deploy.ini` or the only `deploy*.ini` it finds one level down, and asks if there are several. A connection or login error always stops the command with a non-zero exit code, so a failing backup aborts a deploy.
-
-**Databases:** only a SQLite file can be pulled and pushed over FTP. MariaDB/MySQL are not supported by these commands; deploying the code works for any app. `db:push` replaces the whole file, so run it when nobody writes to the live app. There is no remote shell, so migrations run on your machine against a copy; run `db:migrate` before deploying code that needs the new schema.
+`-c <ini>` picks the ini. Without it pfdk uses `deploy.ini` or the only `deploy*.ini` one level down, and asks if there are several. A connection or login error always exits non-zero, so a failing backup aborts a deploy.
 
 ## Configuration
 
-Everything is in one `deploy.ini`, which dg reads too (dg ignores the `pfdk_*` keys).
+One `deploy.ini`, which dg reads too (dg ignores the `pfdk_*` keys).
 
 | Key | Meaning |
 | --- | --- |
 | `pfdk_db` | SQLite file, relative to the project and to the remote root. Enables the database commands |
-| `pfdk_db_local` | Optional local SQLite file when it differs from the live one (for example `var/data_dev.db` locally, `pfdk_db = var/data_prod.db` live). `db:pull` replaces it, `db:push` uploads it, `db:migrate` migrates it. Empty or `/` counts as not set. Default: same path as `pfdk_db` |
-| `pfdk_backups` | Folder for downloaded backups (default `backups`) |
-| `pfdk_backups_keep` | Keep the newest N pfdk backups (by the stamp in the file name), delete older ones (default 10, `0` keeps all). Only files pfdk wrote with its own `pfdk-database-` prefix (`pfdk-database-<stamp>.db`, `pfdk-database-pulled-<stamp>.db`, `pfdk-database-pre-push-<stamp>.db`) are ever deleted. Other files, including older pfdk backups named `database-*.db`, are never deleted; remove those yourself |
-| `pfdk_finally[]` | Local shell command run in the project folder after every `pfdk deploy` once dg was started, whether it succeeded, failed or ran with `--dry`. All steps run even if one fails; the deploy's own result still counts, and a failing step is reported and makes the command exit non-zero. It also runs when dg could not connect (the exit code cannot tell that apart from a failure after `before[]` ran), but not when pfdk stops before dg starts (failed `--pull` or migration). Ctrl-C and SIGTERM during dg are waited out so the steps still run; this needs the pcntl extension, otherwise an interrupted deploy skips them (run them by hand then). Use it to undo what `before[]` did locally (the Symfony presets restore dev packages with it) |
+| `pfdk_db_local` | Local SQLite file if it differs from the live one. Default: same as `pfdk_db` |
+| `pfdk_backups` | Backup folder (default `backups`) |
+| `pfdk_backups_keep` | Keep the newest N pfdk backups (default 10, `0` keeps all) |
+| `pfdk_finally[]` | Steps that run after every deploy, also a failed one. See [Cleanup steps](#cleanup-steps) |
 | `pfdk_type = symfony` | Enables `db:migrate` |
-| `pfdk_migrate_command` | Replaces the default `php bin/console doctrine:migrations:migrate --no-interaction`; run exactly as written |
+| `pfdk_migrate_command` | Replaces the default `php bin/console doctrine:migrations:migrate --no-interaction` |
 | `pfdk_ddev = off` | Never use DDEV (default: use it when it runs) |
 
-Steps like building assets or clearing caches are plain `before[]`/`after[]` jobs in the ini, see dg's documentation. The ini's `local` key (`..` in the presets) is the project folder; `pfdk_db` and relative paths are resolved against it. The folder name `ftp-deployment` is only a convention: `init` adapts the preset to the folder it runs in.
+Building assets, clearing caches and the like are plain `before[]` / `after[]` jobs, see dg's documentation. `local` (`..` in the presets) is the project folder, and relative paths are resolved against it. The folder name `ftp-deployment` is only a convention.
 
-**Separate local and live database files:** with `pfdk_db_local`, the app's local `DATABASE_URL` must point at that file, because `db:migrate` runs the migration through your app: `DATABASE_URL=sqlite:///%kernel.project_dir%/var/data_dev.db`. If the migration leaves `pfdk_db_local` unchanged, `db:migrate` warns and does not push, so an unmigrated copy never replaces the live database.
+## Databases
 
-**Several targets:** either one ini per target (`deploy.staging.ini`, `deploy.production.ini`), or one ini with sections `[staging]` and `[production]` and `--section production`. With sections, `pfdk` never guesses: it asks, or fails listing them. Give each target its own `pfdk_backups` folder.
+- Only **SQLite** files can be pulled and pushed over FTP. MariaDB and MySQL are not supported by these commands; deploying the code works for any app.
+- `db:push` replaces the whole file. Run it when nobody writes to the live app.
+- No remote shell: migrations run on your machine against a copy. Run `db:migrate` before deploying code that needs the new schema.
+- **Different local and live file** (for example `var/data_dev.db` locally, `var/data_prod.db` live): set `pfdk_db_local`. `db:pull` replaces it, `db:push` uploads it, `db:migrate` migrates it. An empty value counts as not set.
+- With `pfdk_db_local` the app's `DATABASE_URL` must point at that file, for example `sqlite:///%kernel.project_dir%/var/data_dev.db`. If the migration leaves the file unchanged, `db:migrate` warns and does not push, so an unmigrated copy never replaces the live database.
 
-**DDEV:** if the project has `.ddev/config.yaml` and DDEV is running, `pfdk exec` and the default migration go through `ddev exec` automatically. The presets use `pfdk exec` for `composer install`, so deploys work with and without DDEV. `pfdk_finally[]` steps are plain shell commands in the shell pfdk itself runs in, they are not sent through DDEV on their own: on the host they run on the host, and inside the DDEV container (for example `ddev exec php ftp-deployment/vendor/bin/pfdk deploy`) they run in the container. To follow the DDEV rule like `before[]` steps do, start the step with `pfdk exec --`, as the presets do.
+## Backups
+
+- `backup`, `db:pull` and `db:push` save into `pfdk_backups`: `pfdk-database-<stamp>.db`, `pfdk-database-pulled-<stamp>.db` and `pfdk-database-pre-push-<stamp>.db`.
+- `pfdk_backups_keep` deletes only files with that `pfdk-database-` prefix, oldest stamp first.
+- Other files are never touched, including older pfdk backups named `database-*.db`. Remove those yourself.
+- Data on the server damaged? Copy the newest backup over your local database and run `pfdk db:push`.
+
+## Cleanup steps
+
+`pfdk_finally[]` undoes what `before[]` did locally, for example restoring dev packages after `composer install --no-dev`. The Symfony presets use it for exactly that.
+
+```ini
+pfdk_finally[] = "php ftp-deployment/vendor/bin/pfdk exec -c ftp-deployment/deploy.ini -- composer install"
+```
+
+- Runs after every `pfdk deploy` once dg started: success, failure and `--dry`.
+- All steps run even if one fails. The deploy's own result still counts, and a failing step makes the command exit non-zero.
+- Also runs when dg could not connect (the exit code cannot tell that apart from a later failure).
+- Does **not** run when pfdk stops before dg starts (failed `--pull` or migration).
+- Ctrl-C and SIGTERM during dg are waited out so the steps still run. This needs the `pcntl` extension; without it an interrupted deploy skips them, so run them by hand.
+- dg skips its own `after[]` steps when a deploy stops midway, which is why cleanup belongs here.
+
+## DDEV
+
+If the project has `.ddev/config.yaml` and DDEV is running, `pfdk exec` and the default migration go through `ddev exec`. Steps in `pfdk_finally[]` are plain shell commands in the shell pfdk runs in, with no DDEV detection of their own. Start a step with `pfdk exec --`, as the presets do, to follow the DDEV rule like `before[]` steps.
+
+## Several targets
+
+One ini per target (`deploy.staging.ini`, `deploy.production.ini`), or one ini with sections `[staging]` and `[production]` and `--section production`. With sections pfdk never guesses: it asks or fails listing them. Give each target its own `pfdk_backups` folder.
 
 ## Presets
 
-`symfony` (production build, prod flag, cache purge, `.htaccess` files), `symfony-sqlite` (adds the database settings and a backup before the build) and `static`. Add your own as a folder, see [CONTRIBUTING.md](CONTRIBUTING.md); `pfdk init ./my-presets/wordpress` installs one from a path.
+`symfony` (production build, prod flag, cache purge, `.htaccess` files), `symfony-sqlite` (adds the database settings and a backup before the build) and `static`. Install your own from a folder: `pfdk init ./my-presets/wordpress`, see [CONTRIBUTING.md](CONTRIBUTING.md).
 
 **Web root and `.htaccess` (Apache):** the Symfony presets put two editable files next to your `deploy.ini` and upload both. Which one does the work depends on your hosting:
 
