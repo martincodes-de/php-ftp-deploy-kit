@@ -13,7 +13,7 @@ final class BackupCommand extends BaseCommand
     protected function execute(InputInterface $input, OutputInterface $output): int
     {
         $config = $this->config($input, $output);
-        $target = $config->backupFile("database-{$this->stamp()}.db");
+        $target = $config->backupFile("pfdk-database-{$this->stamp()}.db");
 
         if (!$this->remote($config, $output)->download($config->requireDb(), $target)) {
             $output->writeln('<comment>No live database found; nothing backed up.</comment>');

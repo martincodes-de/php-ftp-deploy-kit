@@ -37,7 +37,7 @@ final class DbPushCommand extends BaseCommand
         }
 
         $remote = $this->remote($config, $output);
-        $backup = $config->backupFile("database-pre-push-{$this->stamp()}.db");
+        $backup = $config->backupFile("pfdk-database-pre-push-{$this->stamp()}.db");
         $output->writeln($remote->download($config->requireDb(), $backup) ? "Live database backed up as $backup" : 'No live database yet; this is the first push.');
 
         $remote->upload($local, $config->requireDb());

@@ -147,10 +147,10 @@ abstract class BaseCommand extends Command
             return;
         }
 
-        // Exactly the names pfdk writes (stamp() format), so foreign backups such as database-pulled-<other>.db are safe.
+        // Only the pfdk- prefixed names pfdk writes; backups a project keeps itself, or pfdk wrote before the prefix existed, are never deleted.
         $files = array_filter(
-            glob(dirname($config->backupFile('x')) . '/database-*.db') ?: [],
-            static fn (string $file): bool => preg_match('/^database-(pulled-|pre-push-)?\d{8}-\d{6}\.db$/', basename($file)) === 1,
+            glob(dirname($config->backupFile('x')) . '/pfdk-database-*.db') ?: [],
+            static fn (string $file): bool => preg_match('/^pfdk-database-(pulled-|pre-push-)?\d{8}-\d{6}\.db$/', basename($file)) === 1,
         );
         usort($files, fn (string $a, string $b) => filemtime($b) <=> filemtime($a) ?: strcmp($b, $a));
 

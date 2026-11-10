@@ -29,7 +29,7 @@ final class MigrateCommandTest extends ProjectTestCase
 
         self::assertSame(0, $tester->getStatusCode());
         self::assertSame("live\nmigrated\n", $this->remote->files[self::LIVE]);
-        self::assertSame("live\n", $this->onlyFile('backups/database-pre-push-*.db'));
+        self::assertSame("live\n", $this->onlyFile('backups/pfdk-database-pre-push-*.db'));
     }
 
     public function testRunsTheDefaultMigrationCommandInTheProjectFolder(): void

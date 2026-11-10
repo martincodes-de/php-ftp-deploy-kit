@@ -6,7 +6,7 @@ TBD - created by archiving change backup-rotation. Update Purpose after archive.
 ## Requirements
 
 ### Requirement: Keep only the newest backups
-After creating a backup, pfdk SHALL delete the oldest files named `database-[pulled-|pre-push-]YYYYMMDD-HHMMSS.db` in the backup folder so that at most `pfdk_backups_keep` remain. The default is 10. A value of 0 SHALL disable deletion.
+After creating a backup, pfdk SHALL delete the oldest files named `pfdk-database-[pulled-|pre-push-]YYYYMMDD-HHMMSS.db` in the backup folder so that at most `pfdk_backups_keep` remain. The default is 10. A value of 0 SHALL disable deletion.
 
 #### Scenario: more backups than allowed
 - **WHEN** the backup folder holds 4 old backups, `pfdk_backups_keep = 2`, and a new backup is created
@@ -17,10 +17,10 @@ After creating a backup, pfdk SHALL delete the oldest files named `database-[pul
 - **THEN** no backup is deleted
 
 ### Requirement: Rotation only touches pfdk backups
-Rotation SHALL NOT delete files whose names do not match pfdk's stamped format exactly.
+Rotation SHALL NOT delete files whose names do not match pfdk's `pfdk-database-` prefixed names.
 
 #### Scenario: foreign file in the folder
-- **WHEN** the backup folder also holds `notes.txt` or `database-pulled-manual.db`
+- **WHEN** the backup folder also holds `notes.txt` or `database-20240101-000001.db` (older pfdk format) or `database-pulled-manual.db`
 - **THEN** both are kept regardless of `pfdk_backups_keep`
 
 ### Requirement: Rotation after every kind of backup

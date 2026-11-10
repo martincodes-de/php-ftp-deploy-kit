@@ -4,7 +4,7 @@ Rotation deleted every file matching `database-*.db` in the backup folder, inclu
 
 ## What Changes
 
-- Rotation only considers the names pfdk writes: `database-`, an optional `pulled-` or `pre-push-`, then `YYYYMMDD-HHMMSS`, then `.db`.
+- pfdk's own backups are named `pfdk-database-[pulled-|pre-push-]<stamp>.db` and only those are rotated. Older `database-*.db` files are never deleted.
 
 ## Capabilities
 
@@ -16,4 +16,4 @@ None.
 
 ## Impact
 
-`BaseCommand::pruneBackups()`, README. Backups named exactly like pfdk's still count as pfdk's own; `pfdk_backups_keep = 0` or a separate folder avoids that.
+`BaseCommand::pruneBackups()`, README. Old-format backups stay in the folder forever (safe side).
