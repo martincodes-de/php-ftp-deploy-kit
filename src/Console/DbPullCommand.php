@@ -25,11 +25,19 @@ final class DbPullCommand extends BaseCommand
 
         $local = $config->localDbFile();
         if (is_file($local)) {
-            copy($local, "$local.bak-local-$stamp");
+            if (!@copy($local, "$local.bak-local-$stamp")) {
+                $output->writeln("<error>Could not back up $local; local database left untouched.</error>");
+
+                return self::FAILURE;
+            }
             $output->writeln("Local database backed up as $local.bak-local-$stamp");
         }
         is_dir(dirname($local)) || mkdir(dirname($local), 0777, true);
-        copy($pulled, $local);
+        if (!@copy($pulled, $local)) {
+            $output->writeln("<error>Could not write $local; the pulled copy is in $pulled.</error>");
+
+            return self::FAILURE;
+        }
 
         $output->writeln("Pulled live database into $local (copy: $pulled)");
         $this->pruneBackups($config, $output);

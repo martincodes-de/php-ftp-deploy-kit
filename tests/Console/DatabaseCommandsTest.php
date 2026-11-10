@@ -116,6 +116,58 @@ final class DatabaseCommandsTest extends ProjectTestCase
         self::assertSame('live', $this->remote->files[self::LIVE]);
     }
 
+    public function testPullWritesToTheLocalPathWhenItDiffersFromTheRemote(): void
+    {
+        $this->writeIni("pfdk_db = var/data_prod.db\npfdk_db_local = var/data_dev.db\n");
+        mkdir("{$this->dir}/var");
+        file_put_contents("{$this->dir}/var/data_dev.db", 'old dev');
+        $this->remote->files['var/data_prod.db'] = 'live';
+
+        $tester = $this->execute('db:pull');
+
+        self::assertSame(0, $tester->getStatusCode());
+        self::assertSame('live', file_get_contents("{$this->dir}/var/data_dev.db"));
+        self::assertSame('old dev', $this->onlyFile('var/data_dev.db.bak-local-*'));
+        self::assertFileDoesNotExist("{$this->dir}/var/data_prod.db");
+    }
+
+    public function testPushUploadsTheLocalFileToTheRemotePath(): void
+    {
+        $this->writeIni("pfdk_db = var/data_prod.db\npfdk_db_local = var/data_dev.db\n");
+        mkdir("{$this->dir}/var");
+        file_put_contents("{$this->dir}/var/data_dev.db", 'dev');
+        file_put_contents("{$this->dir}/var/data_prod.db", 'must not be pushed');
+        $this->remote->files['var/data_prod.db'] = 'live';
+
+        $tester = $this->execute('db:push', ['--yes' => true]);
+
+        self::assertSame(0, $tester->getStatusCode());
+        self::assertSame('dev', $this->remote->files['var/data_prod.db']);
+        self::assertSame('live', $this->onlyFile('backups/database-pre-push-*.db'));
+    }
+
+    public function testPushComplainsAboutTheMissingLocalFile(): void
+    {
+        $this->writeIni("pfdk_db = var/data_prod.db\npfdk_db_local = var/data_dev.db\n");
+
+        $tester = $this->execute('db:push', ['--yes' => true]);
+
+        self::assertSame(1, $tester->getStatusCode());
+        self::assertStringContainsString('var/data_dev.db', $tester->getDisplay());
+    }
+
+    public function testPullFailsClearlyWhenTheLocalPathIsADirectory(): void
+    {
+        $this->remote->files[self::LIVE] = 'live';
+        mkdir("{$this->dir}/var/database.db", 0777, true);
+
+        $tester = $this->execute('db:pull');
+
+        self::assertSame(1, $tester->getStatusCode());
+        self::assertStringContainsString('Could not write', $tester->getDisplay());
+        self::assertStringNotContainsString('Pulled live database', $tester->getDisplay());
+    }
+
     public function testBackupRemovesOldestBackupsBeyondTheLimit(): void
     {
         $this->writeIni("pfdk_db = var/database.db\npfdk_backups_keep = 2\n");

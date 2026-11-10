@@ -40,12 +40,20 @@ final class MigrateCommand extends BaseCommand
             return self::FAILURE;
         }
 
+        $before = md5_file($config->localDbFile());
+
         // A custom command is run exactly as written, so users stay in control of any wrapping.
         $explicit = $config->migrateCommand !== null;
         if ($this->runInProject($config, $config->migrateCommand ?? self::DEFAULT_MIGRATION, $output, viaDdev: !$explicit) !== 0) {
             $output->writeln('<error>Migration failed; the live database was not touched. The pulled copy is in the backup folder.</error>');
 
             return self::FAILURE;
+        }
+
+        if (md5_file($config->localDbFile()) === $before) {
+            $output->writeln('<comment>The migration did not change ' . $config->localDbFile() . ', so nothing was pushed. If migrations were pending, the app\'s DATABASE_URL does not point at this file (see pfdk_db_local in the README).</comment>');
+
+            return self::SUCCESS;
         }
 
         if ($input->getOption('yes')) {

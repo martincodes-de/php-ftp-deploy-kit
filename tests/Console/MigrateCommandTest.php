@@ -118,6 +118,32 @@ final class MigrateCommandTest extends ProjectTestCase
         self::assertSame(['staging', 'staging'], $sections);
     }
 
+    public function testMigratesTheLocalFileWhenPathsDiffer(): void
+    {
+        $this->writeIni("pfdk_db = var/data_prod.db\npfdk_db_local = var/data_dev.db\npfdk_type = symfony\npfdk_migrate_command = \"echo migrated >> var/data_dev.db\"\n");
+        $this->remote->files['var/data_prod.db'] = "live\n";
+
+        $tester = $this->migrate(['--yes' => true]);
+
+        self::assertSame(0, $tester->getStatusCode());
+        self::assertSame("live\nmigrated\n", $this->remote->files['var/data_prod.db']);
+        self::assertSame("live\nmigrated\n", file_get_contents("{$this->dir}/var/data_dev.db"));
+        self::assertFileDoesNotExist("{$this->dir}/var/data_prod.db");
+    }
+
+    public function testUnchangedLocalFileAfterMigrationIsNotPushed(): void
+    {
+        $this->writeIni("pfdk_db = var/data_prod.db\npfdk_db_local = var/data_dev.db\npfdk_type = symfony\npfdk_migrate_command = \"echo migrated >> var/other.db\"\n");
+        $this->remote->files['var/data_prod.db'] = "live\n";
+
+        $tester = $this->migrate(['--yes' => true]);
+
+        self::assertSame(0, $tester->getStatusCode());
+        self::assertSame("live\n", $this->remote->files['var/data_prod.db']);
+        self::assertStringContainsString('DATABASE_URL', $tester->getDisplay());
+        self::assertEmpty(glob("{$this->dir}/backups/pfdk-database-pre-push-*"));
+    }
+
     public function testDefaultMigrationRunsThroughDdevWhenItRuns(): void
     {
         $log = $this->installFakeDdev();
