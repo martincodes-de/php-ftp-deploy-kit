@@ -335,6 +335,10 @@ final class CurlRemoteFiles implements RemoteFiles
         if ($this->config->scheme === 'ftps') {
             curl_setopt($curl, CURLOPT_USE_SSL, CURLUSESSL_ALL);
         }
+        // Over FTP a NOBODY call (SIZE, QUOTE) would otherwise write the server's header lines to the console.
+        if (!empty($options[CURLOPT_NOBODY])) {
+            curl_setopt($curl, CURLOPT_RETURNTRANSFER, true);
+        }
         $ok = curl_exec($curl) !== false;
         $result = ['ok' => $ok, 'errno' => curl_errno($curl), 'error' => curl_error($curl), 'size' => (int) curl_getinfo($curl, CURLINFO_CONTENT_LENGTH_DOWNLOAD_T)];
         curl_close($curl);

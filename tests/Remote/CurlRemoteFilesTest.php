@@ -520,6 +520,19 @@ final class CurlRemoteFilesTest extends ProjectTestCase
         return (new CurlRemoteFiles(DeployConfig::fromArray('deploy.ini', ['remote' => $remote])))->url('db.sqlite');
     }
 
+    public function testSizeCheckDoesNotPrintTheServerHeadersToTheConsole(): void
+    {
+        file_put_contents("{$this->serverDir}/db.sqlite", 'live');
+        $executor = new \ReflectionMethod($this->remote(), 'curlExecutor');
+
+        ob_start();
+        $result = $executor->invoke($this->remote(), 'file://localhost' . $this->serverDir . '/db.sqlite', [CURLOPT_NOBODY => true]);
+        $printed = ob_get_clean();
+
+        self::assertSame('', $printed);
+        self::assertSame(4, $result['size']);
+    }
+
     private function remote(): CurlRemoteFiles
     {
         return new CurlRemoteFiles(DeployConfig::fromArray('deploy.ini', ['remote' => 'file://localhost' . $this->serverDir]));
