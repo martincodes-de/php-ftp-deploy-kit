@@ -78,7 +78,7 @@ Steps like building assets or clearing caches are plain `before[]`/`after[]` job
 
 **Several targets:** either one ini per target (`deploy.staging.ini`, `deploy.production.ini`), or one ini with sections `[staging]` and `[production]` and `--section production`. With sections, `pfdk` never guesses: it asks, or fails listing them. Give each target its own `pfdk_backups` folder.
 
-**DDEV:** if the project has `.ddev/config.yaml` and DDEV is running, `pfdk exec` and the default migration go through `ddev exec` automatically. The presets use `pfdk exec` for `composer install`, so deploys work with and without DDEV.
+**DDEV:** if the project has `.ddev/config.yaml` and DDEV is running, `pfdk exec` and the default migration go through `ddev exec` automatically. The presets use `pfdk exec` for `composer install`, so deploys work with and without DDEV. `pfdk_finally[]` steps are plain shell commands in the shell pfdk itself runs in, they are not sent through DDEV on their own: on the host they run on the host, and inside the DDEV container (for example `ddev exec php ftp-deployment/vendor/bin/pfdk deploy`) they run in the container. To follow the DDEV rule like `before[]` steps do, start the step with `pfdk exec --`, as the presets do.
 
 ## Presets
 
