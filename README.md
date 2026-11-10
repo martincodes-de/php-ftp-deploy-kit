@@ -61,7 +61,7 @@ One `deploy.ini`, which dg reads too (dg ignores the `pfdk_*` keys).
 | `pfdk_db_local` | Local SQLite file if it differs from the live one. Default: same as `pfdk_db` |
 | `pfdk_backups` | Backup folder (default `backups`) |
 | `pfdk_backups_keep` | Keep the newest N pfdk backups (default 10, `0` keeps all) |
-| `pfdk_retries` | Attempts for a transfer that fails to connect or times out (default 3, `1` = no retry) |
+| `pfdk_retries` | Attempts for a transfer that fails to connect or times out (1 to 10, default 3, `1` = no retry; anything else is an error) |
 | `pfdk_finally[]` | Steps that run after every deploy, also a failed one. See [Cleanup steps](#cleanup-steps) |
 | `pfdk_type = symfony` | Enables `db:migrate` |
 | `pfdk_migrate_command` | Replaces the default `php bin/console doctrine:migrations:migrate --no-interaction` |
@@ -80,7 +80,7 @@ Building assets, clearing caches and the like are plain `before[]` / `after[]` j
 
 ## Flaky connections
 
-- `backup`, `db:pull` and `db:push` try again when the connection fails or times out (curl errors 7, 10, 28): up to `pfdk_retries` attempts, 3 s apart, with a short message on screen.
+- `backup`, `db:pull` and `db:push` try again when the connection fails or times out (curl errors 7, 10, 28, and 55, 56 in the middle of a download or of the temporary upload): up to `pfdk_retries` attempts, 3 s apart, with a short message on screen.
 - Wrong password and missing files are never retried.
 
 ## Backups

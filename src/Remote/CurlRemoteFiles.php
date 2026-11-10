@@ -10,8 +10,12 @@ final class CurlRemoteFiles implements RemoteFiles
     /** PHP exposes no constants for these: FTP couldn't retrieve file (19), file couldn't be read (37), remote file not found (78). */
     private const NOT_FOUND_ERRORS = [19, 37, 78];
 
-    /** Couldn't connect (7), FTP accept failed (10), operation timed out (28). Login (67, 9) and not-found errors never repeat. */
-    private const RETRYABLE_ERRORS = [7, 10, 28];
+    /**
+     * Couldn't connect (7), FTP accept failed (10), timed out (28), send (55) and receive (56) errors in the middle of a
+     * transfer. Only downloads and the upload of the temporary file repeat these, because repeating them is harmless.
+     * Login (67, 9) and not-found errors never repeat.
+     */
+    private const RETRYABLE_ERRORS = [7, 10, 28, 55, 56];
 
     private const PAUSE_SECONDS = 3;
 
@@ -200,7 +204,7 @@ final class CurlRemoteFiles implements RemoteFiles
                 return $result + ['attempts' => $try];
             }
 
-            $this->notify === null || ($this->notify)(sprintf('Connection failed, retrying (%d/%d) ...', $try + 1, $this->config->retries));
+            $this->notify === null || ($this->notify)(sprintf('Connection failed or timed out, retrying (%d/%d) ...', $try + 1, $this->config->retries));
             ($this->sleep)(self::PAUSE_SECONDS);
         }
     }

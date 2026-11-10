@@ -160,13 +160,29 @@ final class DeployConfigTest extends ProjectTestCase
         self::assertSame("sh -c 'bin/console migrate'", $config->migrateCommand);
     }
 
-    public function testRetriesDefaultToThreeAttemptsAndAreAtLeastOne(): void
+    public function testRetriesDefaultToThreeAttempts(): void
     {
         self::assertSame(3, $this->config()->retries);
         self::assertSame(5, $this->config("pfdk_retries = 5\n")->retries);
-        self::assertSame(1, $this->config("pfdk_retries = 0\n")->retries);
-        $this->expectExceptionMessage('pfdk_retries must be a number');
-        $this->config("pfdk_retries = often\n");
+        self::assertSame(1, $this->config("pfdk_retries = 1\n")->retries);
+        self::assertSame(10, $this->config("pfdk_retries = 10\n")->retries);
+    }
+
+    /** @return iterable<string,array{string}> */
+    public static function invalidRetries(): iterable
+    {
+        yield 'zero' => ['0'];
+        yield 'negative' => ['-2'];
+        yield 'too many' => ['11'];
+        yield 'text' => ['often'];
+        yield 'fraction' => ['2.5'];
+    }
+
+    #[\PHPUnit\Framework\Attributes\DataProvider('invalidRetries')]
+    public function testInvalidRetriesAreAConfigurationError(string $value): void
+    {
+        $this->expectExceptionMessage('pfdk_retries must be a whole number from 1 to 10');
+        $this->config("pfdk_retries = $value\n");
     }
 
     public function testDatabaseSettingIsRequiredForDatabaseCommands(): void

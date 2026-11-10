@@ -113,7 +113,7 @@ final class CurlRemoteFilesTest extends ProjectTestCase
         self::assertSame('live', file_get_contents("{$this->dir}/db.sqlite"));
         self::assertCount(3, $calls);
         self::assertSame([3, 3], $pauses);
-        self::assertSame(['Connection failed, retrying (2/3) ...', 'Connection failed, retrying (3/3) ...'], $messages);
+        self::assertSame(['Connection failed or timed out, retrying (2/3) ...', 'Connection failed or timed out, retrying (3/3) ...'], $messages);
     }
 
     public function testGivesUpAfterTheLastAttemptWithAClearMessage(): void
@@ -157,6 +157,17 @@ final class CurlRemoteFilesTest extends ProjectTestCase
         yield 'access denied' => [9, true];
         yield 'cannot retrieve' => [19, false];
         yield 'not found' => [78, false];
+    }
+
+    public function testDownloadRetriesTransferErrorsInTheMiddleOfTheTransfer(): void
+    {
+        foreach ([55, 56] as $errno) {
+            $calls = [];
+            $remote = $this->scripted([[false, $errno, 'broken', 'part'], [true, 0, '', 'live']], $calls, $pauses);
+
+            self::assertTrue($remote->download('db.sqlite', "{$this->dir}/db.sqlite"));
+            self::assertCount(2, $calls);
+        }
     }
 
     public function testUploadRetriesToo(): void
@@ -229,7 +240,7 @@ final class CurlRemoteFilesTest extends ProjectTestCase
     {
         file_put_contents("{$this->dir}/local.sqlite", 'local');
         $calls = [];
-        $remote = $this->scripted([[false, 55, 'broken pipe'], [true, 0, '']], $calls, $pauses);
+        $remote = $this->scripted([[false, 13, 'broken pipe'], [true, 0, '']], $calls, $pauses);
 
         try {
             $remote->upload("{$this->dir}/local.sqlite", 'db.sqlite');

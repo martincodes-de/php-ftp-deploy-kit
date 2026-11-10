@@ -146,11 +146,12 @@ final class DeployConfig
 
     private static function retries(mixed $value): int
     {
-        if (!is_numeric($value)) {
-            throw new \RuntimeException('pfdk_retries must be a number');
+        $text = trim((string) $value);
+        if (preg_match('/^\d+$/', $text) !== 1 || (int) $text < 1 || (int) $text > 10) {
+            throw new \RuntimeException('pfdk_retries must be a whole number from 1 to 10 (attempts in total; 1 = no retry)');
         }
 
-        return max(1, (int) $value);
+        return (int) $text;
     }
 
     private static function backupsKeep(mixed $value): int
