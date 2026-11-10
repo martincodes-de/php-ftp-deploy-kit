@@ -4,8 +4,11 @@ declare(strict_types=1);
 namespace Pfdk\Tests\Console;
 
 use Pfdk\Console\ApplicationFactory;
+use Pfdk\Console\DeployCommand;
 use Pfdk\Tests\Support\InMemoryRemoteFiles;
 use Pfdk\Tests\Support\ProjectTestCase;
+use Symfony\Component\Console\Input\ArrayInput;
+use Symfony\Component\Console\Output\BufferedOutput;
 use Symfony\Component\Console\Tester\CommandTester;
 
 final class DeployCommandTest extends ProjectTestCase
@@ -182,6 +185,57 @@ final class DeployCommandTest extends ProjectTestCase
         $this->deploy(['--pull' => true]);
 
         self::assertFileDoesNotExist("{$this->dir}/finally.log");
+    }
+
+    public function testFinallyDoesNotRunWhenTheMigrationBeforeTheDeployFails(): void
+    {
+        $this->writeFakeDg(0);
+        $this->writeIni("pfdk_db = var/database.db\npfdk_type = symfony\npfdk_migrate_command = \"exit 3\"\npfdk_finally[] = \"echo restored >> finally.log\"\n");
+
+        $tester = $this->deploy([], ['y', 'y'], new InMemoryRemoteFiles(['var/database.db' => "live\n"]));
+
+        self::assertSame(1, $tester->getStatusCode());
+        self::assertFileDoesNotExist("{$this->dir}/finally.log");
+    }
+
+    public function testFinallyRunsEvenWhenDgCannotConnect(): void
+    {
+        $this->writeFakeDg(1);
+        $this->writeIni("pfdk_finally[] = \"echo restored >> finally.log\"\n");
+
+        $this->deploy([]);
+
+        self::assertFileExists("{$this->dir}/finally.log");
+    }
+
+    public function testSigtermWhileDgRunsIsPassedOnAndFinallyStillRuns(): void
+    {
+        if (!function_exists('pcntl_signal') || !function_exists('posix_kill')) {
+            self::markTestSkipped('needs pcntl and posix');
+        }
+        mkdir("{$this->dir}/vendor/dg/ftp-deployment", 0777, true);
+        file_put_contents("{$this->dir}/vendor/dg/ftp-deployment/deployment", "<?php\nposix_kill(posix_getppid(), SIGTERM);\nsleep(3);\nfile_put_contents('survived.log', 'x');\n");
+        $this->writeIni("pfdk_finally[] = \"echo restored >> finally.log\"\n");
+
+        $application = ApplicationFactory::create();
+        $application->setAutoExit(false);
+        $output = new BufferedOutput();
+        $status = $application->run(new ArrayInput(['command' => 'deploy']), $output);
+
+        self::assertSame(1, $status);
+        self::assertFileExists("{$this->dir}/finally.log");
+        self::assertFileDoesNotExist("{$this->dir}/survived.log");
+    }
+
+    public function testSignalOutsideTheDeploymentExitsWithTheSignalCode(): void
+    {
+        if (!function_exists('pcntl_signal')) {
+            self::markTestSkipped('needs pcntl');
+        }
+        $command = new DeployCommand();
+
+        self::assertSame(128 + SIGTERM, $command->handleSignal(SIGTERM));
+        self::assertSame([SIGINT, SIGTERM, SIGHUP], $command->getSubscribedSignals());
     }
 
     public function testSectionCanHaveItsOwnFinallySteps(): void

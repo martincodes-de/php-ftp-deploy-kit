@@ -11,6 +11,14 @@
 - **WHEN** `pfdk deploy --dry` runs
 - **THEN** the finally steps run
 
+#### Scenario: dg cannot connect
+- **WHEN** dg fails before any step ran
+- **THEN** the finally steps still run, because the exit code cannot tell this apart
+
+#### Scenario: interrupted
+- **WHEN** SIGINT, SIGTERM or SIGHUP reaches pfdk while dg runs and pcntl is available
+- **THEN** pfdk passes the signal on (not SIGINT, which the terminal already sent), waits for dg and runs the finally steps
+
 #### Scenario: dg never started
 - **WHEN** `--pull` fails before dg starts
 - **THEN** no finally step runs

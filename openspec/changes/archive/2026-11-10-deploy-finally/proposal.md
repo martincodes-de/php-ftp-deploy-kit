@@ -17,4 +17,4 @@ None.
 
 ## Impact
 
-`DeployConfig`, `DeployCommand`, Symfony presets, README. Not run when nothing was deployed (failed `git pull` or migration), because no `before[]` step ran.
+`DeployConfig`, `DeployCommand`, Symfony presets, README. Not run when nothing was deployed (failed `git pull` or migration), because pfdk stopped before dg started. When dg itself fails to connect the steps still run; that cannot be told apart from a later failure.

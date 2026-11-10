@@ -62,7 +62,7 @@ final class DeployConfig
             self::unquote((string) ($values['local'] ?? '.')),
             self::backupsKeep($values['pfdk_backups_keep'] ?? 10),
             isset($values['pfdk_type']) ? strtolower(self::unquote((string) $values['pfdk_type'])) : null,
-            isset($values['pfdk_migrate_command']) ? self::unquote((string) $values['pfdk_migrate_command']) : null,
+            isset($values['pfdk_migrate_command']) ? trim((string) $values['pfdk_migrate_command']) : null,
             self::ddevEnabled($values['pfdk_ddev'] ?? 'auto'),
             $section,
             self::optionalPath($values['pfdk_db_local'] ?? null),
@@ -163,7 +163,7 @@ final class DeployConfig
     private static function steps(mixed $value): array
     {
         return array_values(array_filter(
-            array_map(static fn (mixed $step): string => self::unquote((string) $step), (array) $value),
+            array_map(static fn (mixed $step): string => trim((string) $step), (array) $value),
             static fn (string $step): bool => $step !== '',
         ));
     }

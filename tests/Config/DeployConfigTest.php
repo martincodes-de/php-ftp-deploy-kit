@@ -148,6 +148,18 @@ final class DeployConfigTest extends ProjectTestCase
         self::assertSame([], $this->config('')->finally);
     }
 
+    public function testStepsAndMigrateCommandKeepTheirOwnQuotes(): void
+    {
+        $config = $this->config(<<<'INI'
+            pfdk_finally[] = "sh -c 'rm -rf public/assets'"
+            pfdk_finally[] = 'echo "done"'
+            pfdk_migrate_command = "sh -c 'bin/console migrate'"
+            INI);
+
+        self::assertSame(['sh -c \'rm -rf public/assets\'', 'echo "done"'], $config->finally);
+        self::assertSame("sh -c 'bin/console migrate'", $config->migrateCommand);
+    }
+
     public function testDatabaseSettingIsRequiredForDatabaseCommands(): void
     {
         $this->expectExceptionMessage('pfdk_db');
