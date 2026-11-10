@@ -160,6 +160,15 @@ final class DeployConfigTest extends ProjectTestCase
         self::assertSame("sh -c 'bin/console migrate'", $config->migrateCommand);
     }
 
+    public function testRetriesDefaultToThreeAttemptsAndAreAtLeastOne(): void
+    {
+        self::assertSame(3, $this->config()->retries);
+        self::assertSame(5, $this->config("pfdk_retries = 5\n")->retries);
+        self::assertSame(1, $this->config("pfdk_retries = 0\n")->retries);
+        $this->expectExceptionMessage('pfdk_retries must be a number');
+        $this->config("pfdk_retries = often\n");
+    }
+
     public function testDatabaseSettingIsRequiredForDatabaseCommands(): void
     {
         $this->expectExceptionMessage('pfdk_db');

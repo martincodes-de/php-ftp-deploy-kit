@@ -24,6 +24,7 @@ final class DeployConfig
         public readonly ?string $dbLocal = null,
         /** @var list<string> */
         public readonly array $finally = [],
+        public readonly int $retries = 3,
     ) {
     }
 
@@ -67,6 +68,7 @@ final class DeployConfig
             $section,
             self::optionalPath($values['pfdk_db_local'] ?? null),
             self::steps($values['pfdk_finally'] ?? []),
+            self::retries($values['pfdk_retries'] ?? 3),
         );
     }
 
@@ -140,6 +142,15 @@ final class DeployConfig
     {
         // PHP's ini parser turns `off` into an empty string.
         return !in_array(strtolower(trim((string) $value)), ['', '0', 'off', 'no', 'false'], true);
+    }
+
+    private static function retries(mixed $value): int
+    {
+        if (!is_numeric($value)) {
+            throw new \RuntimeException('pfdk_retries must be a number');
+        }
+
+        return max(1, (int) $value);
     }
 
     private static function backupsKeep(mixed $value): int

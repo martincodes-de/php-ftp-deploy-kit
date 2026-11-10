@@ -101,7 +101,7 @@ abstract class BaseCommand extends Command
         $this->requireEnvironment($config, forDeploy: false);
         $this->warnIfPlainFtp($config, $output);
 
-        return $this->remoteFactory !== null ? ($this->remoteFactory)($config) : new CurlRemoteFiles($config);
+        return $this->remoteFactory !== null ? ($this->remoteFactory)($config) : new CurlRemoteFiles($config, notify: static fn (string $message) => $output->writeln("<comment>$message</comment>"));
     }
 
     /** Runs a shell command in the project folder, through DDEV when it runs there; returns the exit code. */

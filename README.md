@@ -61,6 +61,7 @@ One `deploy.ini`, which dg reads too (dg ignores the `pfdk_*` keys).
 | `pfdk_db_local` | Local SQLite file if it differs from the live one. Default: same as `pfdk_db` |
 | `pfdk_backups` | Backup folder (default `backups`) |
 | `pfdk_backups_keep` | Keep the newest N pfdk backups (default 10, `0` keeps all) |
+| `pfdk_retries` | Attempts for a transfer that fails to connect or times out (default 3, `1` = no retry) |
 | `pfdk_finally[]` | Steps that run after every deploy, also a failed one. See [Cleanup steps](#cleanup-steps) |
 | `pfdk_type = symfony` | Enables `db:migrate` |
 | `pfdk_migrate_command` | Replaces the default `php bin/console doctrine:migrations:migrate --no-interaction` |
@@ -75,6 +76,11 @@ Building assets, clearing caches and the like are plain `before[]` / `after[]` j
 - No remote shell: migrations run on your machine against a copy. Run `db:migrate` before deploying code that needs the new schema.
 - **Different local and live file** (for example `var/data_dev.db` locally, `var/data_prod.db` live): set `pfdk_db_local`. `db:pull` replaces it, `db:push` uploads it, `db:migrate` migrates it. An empty value counts as not set.
 - With `pfdk_db_local` the app's `DATABASE_URL` must point at that file, for example `sqlite:///%kernel.project_dir%/var/data_dev.db`. If the migration leaves the file unchanged, `db:migrate` warns and does not push, so an unmigrated copy never replaces the live database.
+
+## Flaky connections
+
+- `backup`, `db:pull` and `db:push` try again when the connection fails or times out (curl errors 7, 10, 28): up to `pfdk_retries` attempts, 3 s apart, with a short message on screen.
+- Wrong password and missing files are never retried.
 
 ## Backups
 
