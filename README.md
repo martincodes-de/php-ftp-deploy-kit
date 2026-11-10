@@ -73,9 +73,7 @@ Everything is in one `deploy.ini`, which dg reads too (dg ignores the `pfdk_*` k
 
 Steps like building assets or clearing caches are plain `before[]`/`after[]` jobs in the ini, see dg's documentation. The ini's `local` key (`..` in the presets) is the project folder; `pfdk_db` and relative paths are resolved against it. The folder name `ftp-deployment` is only a convention: `init` adapts the preset to the folder it runs in.
 
-### Separate local and live database files
-
-With `pfdk_db_local`, the app's local `DATABASE_URL` must point at that file, because `db:migrate` runs the migration through your app: `DATABASE_URL=sqlite:///%kernel.project_dir%/var/data_dev.db`. If the migration leaves `pfdk_db_local` unchanged, `db:migrate` warns and does not push, so an unmigrated copy never replaces the live database.
+**Separate local and live database files:** with `pfdk_db_local`, the app's local `DATABASE_URL` must point at that file, because `db:migrate` runs the migration through your app: `DATABASE_URL=sqlite:///%kernel.project_dir%/var/data_dev.db`. If the migration leaves `pfdk_db_local` unchanged, `db:migrate` warns and does not push, so an unmigrated copy never replaces the live database.
 
 **Several targets:** either one ini per target (`deploy.staging.ini`, `deploy.production.ini`), or one ini with sections `[staging]` and `[production]` and `--section production`. With sections, `pfdk` never guesses: it asks, or fails listing them. Give each target its own `pfdk_backups` folder.
 
