@@ -64,6 +64,7 @@ Everything is in one `deploy.ini`, which dg reads too (dg ignores the `pfdk_*` k
 | Key | Meaning |
 | --- | --- |
 | `pfdk_db` | SQLite file, relative to the project and to the remote root. Enables the database commands |
+| `pfdk_db_local` | Optional local SQLite file when it differs from the live one (for example `var/data_dev.db` locally, `pfdk_db = var/data_prod.db` live). `db:pull` replaces it, `db:push` uploads it, `db:migrate` migrates it. Default: same path as `pfdk_db` |
 | `pfdk_backups` | Folder for downloaded backups (default `backups`) |
 | `pfdk_backups_keep` | Keep the newest N backups, delete older ones (default 10, `0` keeps all) |
 | `pfdk_type = symfony` | Enables `db:migrate` |
