@@ -163,12 +163,151 @@ final class CurlRemoteFilesTest extends ProjectTestCase
     {
         file_put_contents("{$this->dir}/local.sqlite", 'local');
         $calls = [];
-        $remote = $this->scripted([[false, 28, 'timeout'], [true, 0, '']], $calls, $pauses);
+        $remote = $this->scripted([[false, 28, 'timeout'], [true, 0, ''], [true, 0, '', '', 5], [true, 0, '']], $calls, $pauses);
 
         $remote->upload("{$this->dir}/local.sqlite", 'db.sqlite');
 
-        self::assertCount(2, $calls);
+        self::assertCount(4, $calls);
         self::assertSame([3], $pauses);
+    }
+
+    public function testUploadGoesToATemporaryNameThenIsSizeCheckedThenRenamed(): void
+    {
+        file_put_contents("{$this->dir}/local.sqlite", 'local');
+        $calls = [];
+        $remote = $this->scripted([[true, 0, ''], [true, 0, '', '', 5], [true, 0, '']], $calls, $pauses);
+
+        $remote->upload("{$this->dir}/local.sqlite", 'var/db.sqlite');
+
+        self::assertSame(
+            ['PUT ftp://host/app/var/db.sqlite.pfdk-upload', 'SIZE ftp://host/app/var/db.sqlite.pfdk-upload', 'ftp://host/app/ RNFR app/var/db.sqlite.pfdk-upload | RNTO app/var/db.sqlite'],
+            array_map($this->describe(...), $calls),
+        );
+    }
+
+    public function testRenameOverAnExistingFileFallsBackToDeletingTheTargetFirstLikeDg(): void
+    {
+        file_put_contents("{$this->dir}/local.sqlite", 'local');
+        $calls = [];
+        $remote = $this->scripted([[true, 0, ''], [true, 0, '', '', 5], [false, 21, 'RNTO refused'], [true, 0, ''], [true, 0, '']], $calls, $pauses);
+
+        $remote->upload("{$this->dir}/local.sqlite", 'db.sqlite');
+
+        self::assertSame(
+            ['ftp://host/app/ RNFR app/db.sqlite.pfdk-upload | RNTO app/db.sqlite', 'ftp://host/app/ DELE app/db.sqlite', 'ftp://host/app/ RNFR app/db.sqlite.pfdk-upload | RNTO app/db.sqlite'],
+            array_slice(array_map($this->describe(...), $calls), 2),
+        );
+    }
+
+    public function testSizeMismatchRemovesTheTemporaryFileAndNeverRenames(): void
+    {
+        file_put_contents("{$this->dir}/local.sqlite", 'local');
+        $calls = [];
+        $remote = $this->scripted([[true, 0, ''], [true, 0, '', '', 3], [true, 0, '']], $calls, $pauses);
+
+        try {
+            $remote->upload("{$this->dir}/local.sqlite", 'db.sqlite');
+            self::fail('Expected the upload to fail');
+        } catch (\RuntimeException $e) {
+            self::assertSame('Upload incomplete: 3 of 5 bytes arrived; the live file was not touched.', $e->getMessage());
+        }
+        self::assertSame('ftp://host/app/ DELE app/db.sqlite.pfdk-upload', $this->describe($calls[2]));
+        self::assertCount(3, $calls);
+    }
+
+    public function testUnknownRemoteSizeCountsAsFailure(): void
+    {
+        file_put_contents("{$this->dir}/local.sqlite", 'local');
+        $calls = [];
+        $remote = $this->scripted([[true, 0, ''], [true, 0, '', '', -1], [true, 0, '']], $calls, $pauses);
+
+        $this->expectExceptionMessage('Upload incomplete');
+        $remote->upload("{$this->dir}/local.sqlite", 'db.sqlite');
+    }
+
+    public function testFailedTransferRemovesTheTemporaryFile(): void
+    {
+        file_put_contents("{$this->dir}/local.sqlite", 'local');
+        $calls = [];
+        $remote = $this->scripted([[false, 55, 'broken pipe'], [true, 0, '']], $calls, $pauses);
+
+        try {
+            $remote->upload("{$this->dir}/local.sqlite", 'db.sqlite');
+            self::fail('Expected the upload to fail');
+        } catch (\RuntimeException $e) {
+            self::assertSame('Upload failed: broken pipe', $e->getMessage());
+        }
+        self::assertSame('ftp://host/app/ DELE app/db.sqlite.pfdk-upload', $this->describe($calls[1]));
+    }
+
+    public function testFailedRenameWithAnUntouchedTargetCleansUp(): void
+    {
+        file_put_contents("{$this->dir}/local.sqlite", 'local');
+        $calls = [];
+        $remote = $this->scripted([[true, 0, ''], [true, 0, '', '', 5], [false, 21, 'no'], [false, 21, 'no such file'], [false, 21, 'no'], [true, 0, '']], $calls, $pauses);
+
+        try {
+            $remote->upload("{$this->dir}/local.sqlite", 'db.sqlite');
+            self::fail('Expected the upload to fail');
+        } catch (\RuntimeException $e) {
+            self::assertStringContainsString('The live file was not touched.', $e->getMessage());
+        }
+        self::assertSame('ftp://host/app/ DELE app/db.sqlite.pfdk-upload', $this->describe($calls[5]));
+    }
+
+    public function testFailedRenameAfterTheTargetWasDeletedKeepsTheCompleteNewFile(): void
+    {
+        file_put_contents("{$this->dir}/local.sqlite", 'local');
+        $calls = [];
+        $remote = $this->scripted([[true, 0, ''], [true, 0, '', '', 5], [false, 21, 'no'], [true, 0, ''], [false, 21, 'no']], $calls, $pauses);
+
+        try {
+            $remote->upload("{$this->dir}/local.sqlite", 'db.sqlite');
+            self::fail('Expected the upload to fail');
+        } catch (\RuntimeException $e) {
+            self::assertStringContainsString('on the server as db.sqlite.pfdk-upload', $e->getMessage());
+        }
+        self::assertCount(5, $calls, 'the temporary file is not deleted');
+    }
+
+    public function testFileTargetsAreReplacedWithoutLeavingTheTemporaryFile(): void
+    {
+        file_put_contents("{$this->serverDir}/db.sqlite", 'old');
+        file_put_contents("{$this->dir}/local.sqlite", 'new');
+
+        $this->remote()->upload("{$this->dir}/local.sqlite", 'db.sqlite');
+
+        self::assertSame('new', file_get_contents("{$this->serverDir}/db.sqlite"));
+        self::assertSame(['db.sqlite'], array_values(array_diff(scandir($this->serverDir), ['.', '..'])));
+    }
+
+    public function testFileTargetKeepsTheOldFileWhenTheRenameFails(): void
+    {
+        mkdir("{$this->serverDir}/db.sqlite");
+        file_put_contents("{$this->dir}/local.sqlite", 'new');
+
+        try {
+            $this->remote()->upload("{$this->dir}/local.sqlite", 'db.sqlite');
+            self::fail('Expected the upload to fail');
+        } catch (\RuntimeException $e) {
+            self::assertStringContainsString('old file was not touched', $e->getMessage());
+        }
+        self::assertFileDoesNotExist("{$this->serverDir}/db.sqlite.pfdk-upload");
+        self::assertDirectoryExists("{$this->serverDir}/db.sqlite");
+    }
+
+    /** @param array{url:string,options:array<int,mixed>} $call */
+    private function describe(array $call): string
+    {
+        $options = $call['options'];
+        if (isset($options[CURLOPT_UPLOAD])) {
+            return 'PUT ' . $call['url'];
+        }
+        if (isset($options[CURLOPT_QUOTE])) {
+            return $call['url'] . ' ' . implode(' | ', $options[CURLOPT_QUOTE]);
+        }
+
+        return 'SIZE ' . $call['url'];
     }
 
     public function testOneAttemptMeansNoRetry(): void
@@ -185,8 +324,8 @@ final class CurlRemoteFilesTest extends ProjectTestCase
     }
 
     /**
-     * @param list<array{0:bool,1:int,2:string,3?:string}> $script ok, curl errno, message, optional bytes written to the download handle
-     * @param list<string>                                  $calls
+     * @param list<array{0:bool,1:int,2:string,3?:string,4?:int}> $script ok, curl errno, message, optional bytes written to the download handle, optional remote size
+     * @param list<array{url:string,options:array<int,mixed>}> $calls
      * @param list<int>|null                                $pauses
      * @param list<string>|null                             $messages
      */
@@ -195,13 +334,13 @@ final class CurlRemoteFilesTest extends ProjectTestCase
         $pauses = [];
         $messages = [];
         $executor = static function (string $url, array $options) use (&$script, &$calls): array {
-            $calls[] = $url;
-            [$ok, $errno, $error, $bytes] = array_shift($script) + [3 => ''];
+            $calls[] = ['url' => $url, 'options' => $options];
+            [$ok, $errno, $error, $bytes, $size] = array_shift($script) + [3 => '', 4 => 0];
             if (isset($options[CURLOPT_FILE])) {
                 fwrite($options[CURLOPT_FILE], $bytes);
             }
 
-            return ['ok' => $ok, 'errno' => $errno, 'error' => $error];
+            return ['ok' => $ok, 'errno' => $errno, 'error' => $error, 'size' => $size];
         };
 
         return new CurlRemoteFiles(

@@ -72,6 +72,7 @@ Building assets, clearing caches and the like are plain `before[]` / `after[]` j
 ## Databases
 
 - Only **SQLite** files can be pulled and pushed over FTP. MariaDB and MySQL are not supported by these commands; deploying the code works for any app.
+- `db:push` uploads to `<name>.pfdk-upload` first, checks the size, then renames it over the live file, so an aborted upload never leaves a truncated database. Some servers refuse to rename over an existing file; then pfdk deletes the old file right before renaming, as dg does. If that last rename fails, the complete new file stays on the server as `<name>.pfdk-upload`.
 - `db:push` replaces the whole file. Run it when nobody writes to the live app.
 - No remote shell: migrations run on your machine against a copy. Run `db:migrate` before deploying code that needs the new schema.
 - **Different local and live file** (for example `var/data_dev.db` locally, `var/data_prod.db` live): set `pfdk_db_local`. `db:pull` replaces it, `db:push` uploads it, `db:migrate` migrates it. An empty value counts as not set.
