@@ -143,7 +143,7 @@ final class DatabaseCommandsTest extends ProjectTestCase
 
         self::assertSame(0, $tester->getStatusCode());
         self::assertSame('dev', $this->remote->files['var/data_prod.db']);
-        self::assertSame('live', $this->onlyFile('backups/database-pre-push-*.db'));
+        self::assertSame('live', $this->onlyFile('backups/pfdk-database-pre-push-*.db'));
     }
 
     public function testPushComplainsAboutTheMissingLocalFile(): void
