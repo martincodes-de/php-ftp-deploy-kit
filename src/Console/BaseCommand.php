@@ -147,8 +147,11 @@ abstract class BaseCommand extends Command
             return;
         }
 
-        // Only our own file names, so anything else a user keeps in that folder is safe.
-        $files = glob(dirname($config->backupFile('x')) . '/database-*.db') ?: [];
+        // Exactly the names pfdk writes (stamp() format), so foreign backups such as database-pulled-<other>.db are safe.
+        $files = array_filter(
+            glob(dirname($config->backupFile('x')) . '/database-*.db') ?: [],
+            static fn (string $file): bool => preg_match('/^database-(pulled-|pre-push-)?\d{8}-\d{6}\.db$/', basename($file)) === 1,
+        );
         usort($files, fn (string $a, string $b) => filemtime($b) <=> filemtime($a) ?: strcmp($b, $a));
 
         foreach (array_slice($files, $config->backupsKeep) as $old) {
