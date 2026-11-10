@@ -21,6 +21,9 @@ final class CurlRemoteFiles implements RemoteFiles
 
     private const UPLOAD_SUFFIX = '.pfdk-upload';
 
+    /** curl's "quote command failed" (21): the server answered the rename or delete with an FTP error (5xx). */
+    private const REFUSED = 21;
+
     /** @var callable(string, array<int,mixed>):array{ok:bool,errno:int,error:string,size?:int} */
     private $executor;
 
@@ -78,11 +81,13 @@ final class CurlRemoteFiles implements RemoteFiles
 
     /**
      * The live file is only replaced by a complete upload: it goes to a temporary name next to it, its size is
-     * checked, and then it is renamed. Any failure removes the temporary file.
+     * checked, and then it is renamed. Only the transfer itself is repeated on connection errors; the checks, the
+     * rename and every delete run once, because repeating them after a lost answer could destroy the live file.
      */
     public function upload(string $localFile, string $remotePath): void
     {
         $temporary = $remotePath . self::UPLOAD_SUFFIX;
+        $size = filesize($localFile);
 
         if ($this->config->scheme === 'file') {
             $this->uploadToFolder($localFile, $remotePath, $temporary);
@@ -91,98 +96,195 @@ final class CurlRemoteFiles implements RemoteFiles
         }
 
         try {
-            $result = $this->withRetries(function () use ($localFile, $temporary): array {
-                $handle = fopen($localFile, 'rb');
-                $result = ($this->executor)($this->url($temporary), [
-                    CURLOPT_UPLOAD => true,
-                    CURLOPT_INFILE => $handle,
-                    CURLOPT_INFILESIZE => filesize($localFile),
-                    CURLOPT_FTP_CREATE_MISSING_DIRS => true,
-                ]);
-                fclose($handle);
-
-                return $result;
-            });
-            $this->assertOk($result, 'Upload failed');
-
-            $size = $this->call($this->url($temporary), [CURLOPT_NOBODY => true]);
-            $this->assertOk($size, 'Upload failed (could not check the size)');
-            if (($size['size'] ?? -1) !== filesize($localFile)) {
-                throw new \RuntimeException(sprintf('Upload incomplete: %d of %d bytes arrived; the live file was not touched.', max(0, $size['size'] ?? 0), filesize($localFile)));
-            }
+            $this->transferTemporary($localFile, $temporary);
+            $this->assertSize($temporary, $size);
         } catch (\RuntimeException $e) {
-            $this->removeRemote($temporary);
+            $this->removeTemporary($temporary);
 
             throw $e;
         }
 
-        $this->replace($temporary, $remotePath);
+        $this->replace($temporary, $remotePath, $size);
     }
 
-    /** Same order as dg: a server that refuses to rename over an existing file gets the target deleted first. */
-    private function replace(string $temporary, string $target): void
+    private function transferTemporary(string $localFile, string $temporary): void
     {
-        $rename = [CURLOPT_NOBODY => true, CURLOPT_QUOTE => ['RNFR ' . $this->serverPath($temporary), 'RNTO ' . $this->serverPath($target)]];
-        $first = $this->call($this->url(''), $rename);
+        $result = $this->withRetries(function () use ($localFile, $temporary): array {
+            $handle = fopen($localFile, 'rb');
+            $result = ($this->executor)($this->url($temporary), [
+                CURLOPT_UPLOAD => true,
+                CURLOPT_INFILE => $handle,
+                CURLOPT_INFILESIZE => filesize($localFile),
+                CURLOPT_FTP_CREATE_MISSING_DIRS => true,
+            ]);
+            fclose($handle);
+
+            return $result;
+        });
+
+        if (!$result['ok']) {
+            throw new \RuntimeException("Upload failed{$this->attemptsNote($result)}: {$result['error']}");
+        }
+    }
+
+    private function assertSize(string $relative, int $expected): void
+    {
+        $result = $this->remoteSize($relative);
+        if (!$result['ok']) {
+            throw new \RuntimeException("Upload failed (could not check the size): {$result['error']}");
+        }
+        if ($result['size'] < 0) {
+            throw new \RuntimeException('Server reports no file size, so the upload cannot be verified and is not used; the live file was not touched.');
+        }
+        if ($result['size'] !== $expected) {
+            throw new \RuntimeException(sprintf('Upload incomplete: %d of %d bytes arrived; the live file was not touched.', $result['size'], $expected));
+        }
+    }
+
+    /**
+     * Renames over the target. The server's answer to a rename can get lost after it was carried out, so after a
+     * connection error the state is read back instead of guessed. Deleting the target is only a fallback for a server
+     * that explicitly refuses to rename over an existing file (the order dg uses), never a reaction to a network error.
+     */
+    private function replace(string $temporary, string $target, int $size): void
+    {
+        $first = $this->rename($temporary, $target);
         if ($first['ok']) {
             return;
         }
 
-        $deleted = $this->call($this->url(''), [CURLOPT_NOBODY => true, CURLOPT_QUOTE => ['DELE ' . $this->serverPath($target)]]);
-        $second = $this->call($this->url(''), $rename);
+        if (in_array($first['errno'], self::RETRYABLE_ERRORS, true)) {
+            $this->settleAfterLostAnswer($temporary, $target, $size, $first['error']);
+
+            return;
+        }
+
+        if ($first['errno'] !== self::REFUSED) {
+            $this->removeTemporary($temporary);
+
+            throw new \RuntimeException("Upload failed while renaming: {$first['error']}. The live file was not touched.");
+        }
+
+        $this->overwriteAfterRefusal($temporary, $target, $size, $first['error']);
+    }
+
+    private function settleAfterLostAnswer(string $temporary, string $target, int $size, string $error): void
+    {
+        $targetSize = $this->remoteSize($target);
+        $temporarySize = $this->remoteSize($temporary);
+        $temporaryGone = !$temporarySize['ok'] && in_array($temporarySize['errno'], self::NOT_FOUND_ERRORS, true);
+
+        if ($targetSize['ok'] && $targetSize['size'] === $size && $temporaryGone) {
+            return;
+        }
+
+        if ($temporarySize['ok'] && $temporarySize['size'] === $size) {
+            $this->removeTemporary($temporary);
+
+            throw new \RuntimeException("Upload failed while renaming ($error). The rename did not happen, the live file was not touched and the temporary file was removed.");
+        }
+
+        [$target, $temporary] = [$this->serverPath($target), $this->serverPath($temporary)];
+
+        throw new \RuntimeException("Upload state unclear after a connection error while renaming ($error). Nothing was deleted. Check $target and $temporary on the server: if $temporary is gone and $target is the new file, the upload worked; if both exist, $target is still the old file and $temporary can be deleted.");
+    }
+
+    private function overwriteAfterRefusal(string $temporary, string $target, int $size, string $error): void
+    {
+        $temporarySize = $this->remoteSize($temporary);
+        if (!$temporarySize['ok'] || $temporarySize['size'] !== $size) {
+            $this->removeTemporary($temporary);
+
+            throw new \RuntimeException("Upload failed while renaming: $error. The live file was not touched.");
+        }
+
+        $deleted = $this->once($this->url(''), [CURLOPT_NOBODY => true, CURLOPT_QUOTE => ['DELE ' . $this->serverPath($target)]]);
+        if (!$deleted['ok']) {
+            if ($deleted['errno'] === self::REFUSED) {
+                $this->removeTemporary($temporary);
+
+                throw new \RuntimeException("Upload failed: the server refuses to replace $target ({$deleted['error']}). The live file was not touched.");
+            }
+
+            [$target, $temporary] = [$this->serverPath($target), $this->serverPath($temporary)];
+
+            throw new \RuntimeException("Upload state unclear after a connection error while deleting $target ({$deleted['error']}). Check $target and $temporary on the server; $temporary holds the complete new file.");
+        }
+
+        $second = $this->rename($temporary, $target);
         if ($second['ok']) {
             return;
         }
 
-        if ($deleted['ok']) {
+        $remaining = $this->remoteSize($temporary);
+        [$target, $temporary] = [$this->serverPath($target), $this->serverPath($temporary)];
+        if ($remaining['ok'] && $remaining['size'] === $size) {
             throw new \RuntimeException("Upload failed while renaming: {$second['error']}. The old live file was removed; the complete new file is on the server as $temporary.");
         }
-        $this->removeRemote($temporary);
 
-        throw new \RuntimeException("Upload failed while renaming: {$second['error']}. The live file was not touched.");
+        throw new \RuntimeException("Upload state unclear after the old live file was removed ({$second['error']}). Check $target and $temporary on the server.");
     }
 
-    private function removeRemote(string $relative): void
+    /** @return array{ok:bool,errno:int,error:string} */
+    private function rename(string $from, string $to): array
     {
-        $this->call($this->url(''), [CURLOPT_NOBODY => true, CURLOPT_QUOTE => ['DELE ' . $this->serverPath($relative)]]);
+        return $this->once($this->url(''), [CURLOPT_NOBODY => true, CURLOPT_QUOTE => ['RNFR ' . $this->serverPath($from), 'RNTO ' . $this->serverPath($to)]]);
+    }
+
+    /** @return array{ok:bool,errno:int,error:string,size:int} */
+    private function remoteSize(string $relative): array
+    {
+        return $this->once($this->url($relative), [CURLOPT_NOBODY => true]) + ['size' => -1];
+    }
+
+    private function removeTemporary(string $relative): void
+    {
+        $this->once($this->url(''), [CURLOPT_NOBODY => true, CURLOPT_QUOTE => ['DELE ' . $this->serverPath($relative)]]);
+    }
+
+    /**
+     * @param array<int,mixed> $options
+     *
+     * @return array{ok:bool,errno:int,error:string,size?:int}
+     */
+    private function once(string $url, array $options): array
+    {
+        return ($this->executor)($url, $options);
     }
 
     private function serverPath(string $relative): string
     {
-        return ($this->config->remotePath !== '' ? $this->config->remotePath . '/' : '') . ltrim($relative, '/');
+        $path = ($this->config->remotePath !== '' ? $this->config->remotePath . '/' : '') . ltrim($relative, '/');
+        if (preg_match('/[\r\n]/', $path) === 1) {
+            throw new \RuntimeException('Remote path contains a line break.');
+        }
+
+        return $path;
     }
 
     private function uploadToFolder(string $localFile, string $remotePath, string $temporary): void
     {
-        $target = (string) parse_url($this->url($remotePath), PHP_URL_PATH);
-        $partial = (string) parse_url($this->url($temporary), PHP_URL_PATH);
+        $target = $this->folderPath($remotePath);
+        $partial = $this->folderPath($temporary);
 
-        if (!@copy($localFile, $partial)) {
+        if (!@copy($localFile, $partial) || filesize($partial) !== filesize($localFile)) {
+            @unlink($partial);
+
             throw new \RuntimeException("Upload failed: cannot write $remotePath");
         }
-        if (filesize($partial) !== filesize($localFile) || !@rename($partial, $target)) {
+        if (!@rename($partial, $target)) {
             @unlink($partial);
 
             throw new \RuntimeException("Upload failed: cannot replace $remotePath; the old file was not touched.");
         }
     }
 
-    /** @param array{ok:bool,errno:int,error:string,attempts?:int} $result */
-    private function assertOk(array $result, string $message): void
+    /** From the configured path, not from the URL, so #, ? and % in a name stay what they are. */
+    private function folderPath(string $relative): string
     {
-        if (!$result['ok']) {
-            throw new \RuntimeException("$message{$this->attemptsNote($result)}: {$result['error']}");
-        }
-    }
+        $base = rawurldecode($this->config->remotePath);
 
-    /**
-     * @param array<int,mixed> $options
-     *
-     * @return array{ok:bool,errno:int,error:string,size?:int,attempts?:int}
-     */
-    private function call(string $url, array $options): array
-    {
-        return $this->withRetries(fn (): array => ($this->executor)($url, $options));
+        return '/' . ($base !== '' ? $base . '/' : '') . ltrim($relative, '/');
     }
 
     /** dg's ftps:// is explicit TLS on the normal port; curl's own ftps:// would mean implicit TLS on port 990. */
