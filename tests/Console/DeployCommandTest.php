@@ -117,6 +117,84 @@ final class DeployCommandTest extends ProjectTestCase
         self::assertSame("live\n", $remote->files['var/database.db']);
     }
 
+    public function testFinallyStepsRunAfterASuccessfulDeploy(): void
+    {
+        $this->writeFakeDg(0);
+        $this->writeIni("pfdk_finally[] = \"echo one >> finally.log\"\npfdk_finally[] = \"echo two >> finally.log\"\n");
+
+        $tester = $this->deploy([]);
+
+        self::assertSame(0, $tester->getStatusCode());
+        self::assertSame("one\ntwo\n", file_get_contents("{$this->dir}/finally.log"));
+    }
+
+    public function testFinallyStepsRunAfterAFailedDeployAndTheDeployExitCodeWins(): void
+    {
+        $this->writeFakeDg(3);
+        $this->writeIni("pfdk_finally[] = \"echo restored >> finally.log\"\n");
+
+        $tester = $this->deploy([]);
+
+        self::assertSame(1, $tester->getStatusCode());
+        self::assertSame("restored\n", file_get_contents("{$this->dir}/finally.log"));
+    }
+
+    public function testFinallyStepsRunAfterADryRun(): void
+    {
+        $this->writeFakeDg(0);
+        $this->writeIni("pfdk_finally[] = \"echo restored >> finally.log\"\n");
+
+        $tester = $this->deploy(['--dry' => true]);
+
+        self::assertSame(0, $tester->getStatusCode());
+        self::assertFileExists("{$this->dir}/finally.log");
+    }
+
+    public function testFailingFinallyStepIsShownFailsTheCommandAndDoesNotSkipTheNext(): void
+    {
+        $this->writeFakeDg(0);
+        $this->writeIni("pfdk_finally[] = \"exit 4\"\npfdk_finally[] = \"echo next >> finally.log\"\n");
+
+        $tester = $this->deploy([]);
+
+        self::assertSame(1, $tester->getStatusCode());
+        self::assertStringContainsString('pfdk_finally step failed: exit 4', $tester->getDisplay());
+        self::assertFileExists("{$this->dir}/finally.log");
+    }
+
+    public function testFailingFinallyStepDoesNotHideAFailedDeploy(): void
+    {
+        $this->writeFakeDg(3);
+        $this->writeIni("pfdk_finally[] = \"exit 4\"\n");
+
+        $tester = $this->deploy([]);
+
+        self::assertSame(1, $tester->getStatusCode());
+        self::assertStringContainsString('args:', $tester->getDisplay());
+        self::assertStringContainsString('pfdk_finally step failed', $tester->getDisplay());
+    }
+
+    public function testFinallyStepsDoNotRunWhenNothingWasDeployed(): void
+    {
+        $this->writeFakeDg(0);
+        $this->writeIni("pfdk_finally[] = \"echo restored >> finally.log\"\n");
+
+        $this->deploy(['--pull' => true]);
+
+        self::assertFileDoesNotExist("{$this->dir}/finally.log");
+    }
+
+    public function testSectionCanHaveItsOwnFinallySteps(): void
+    {
+        $this->writeFakeDg(0);
+        file_put_contents("{$this->dir}/deploy.ini", "[staging]\nremote = \"ftps://u:p@s.example.org/app\"\npfdk_finally[] = \"echo staging >> finally.log\"\n[production]\nremote = \"ftps://u:p@example.org/app\"\n");
+
+        $this->deploy(['--section' => 'staging']);
+        $this->deploy(['--section' => 'production']);
+
+        self::assertSame("staging\n", file_get_contents("{$this->dir}/finally.log"));
+    }
+
     private function symfonyProject(string $migration): InMemoryRemoteFiles
     {
         $this->writeFakeDg(0);

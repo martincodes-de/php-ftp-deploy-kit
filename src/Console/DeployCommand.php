@@ -51,7 +51,28 @@ final class DeployCommand extends BaseCommand
             $command[] = '--test';
         }
 
-        return $this->runProcess($command, $output) ? self::SUCCESS : self::FAILURE;
+        try {
+            $deployed = $this->runProcess($command, $output);
+        } finally {
+            $cleaned = $this->runFinally($config, $output);
+        }
+
+        return $deployed && $cleaned ? self::SUCCESS : self::FAILURE;
+    }
+
+    /** Runs every step even if one fails; a dry run too, because dg runs before[] steps then as well. */
+    private function runFinally(DeployConfig $config, OutputInterface $output): bool
+    {
+        $allSucceeded = true;
+        foreach ($config->finally as $step) {
+            $output->writeln("<comment>pfdk_finally: $step</comment>");
+            if ($this->runInProject($config, $step, $output, viaDdev: false) !== 0) {
+                $output->writeln("<error>pfdk_finally step failed: $step</error>");
+                $allSucceeded = false;
+            }
+        }
+
+        return $allSucceeded;
     }
 
     /** Only offered for Symfony projects with a database, and never for a dry run, which must not change anything. */

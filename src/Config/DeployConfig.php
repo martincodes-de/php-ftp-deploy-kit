@@ -22,6 +22,8 @@ final class DeployConfig
         public readonly bool $ddev = true,
         public readonly ?string $section = null,
         public readonly ?string $dbLocal = null,
+        /** @var list<string> */
+        public readonly array $finally = [],
     ) {
     }
 
@@ -64,6 +66,7 @@ final class DeployConfig
             self::ddevEnabled($values['pfdk_ddev'] ?? 'auto'),
             $section,
             self::optionalPath($values['pfdk_db_local'] ?? null),
+            self::steps($values['pfdk_finally'] ?? []),
         );
     }
 
@@ -154,6 +157,15 @@ final class DeployConfig
         $path = trim(self::unquote((string) $value), '/');
 
         return $path === '' ? null : $path;
+    }
+
+    /** @return list<string> */
+    private static function steps(mixed $value): array
+    {
+        return array_values(array_filter(
+            array_map(static fn (mixed $step): string => self::unquote((string) $step), (array) $value),
+            static fn (string $step): bool => $step !== '',
+        ));
     }
 
     private static function unquote(string $value): string

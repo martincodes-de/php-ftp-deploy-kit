@@ -249,6 +249,17 @@ final class InitCommandTest extends ProjectTestCase
         self::assertStringContainsString('composer install --no-dev', $ini['before'][0]);
     }
 
+    #[DataProvider('symfonyPresets')]
+    public function testSymfonyPresetsRestoreTheProjectInFinallyNotAfter(string $preset): void
+    {
+        $this->init(['preset' => $preset]);
+        $ini = parse_ini_file("{$this->dir}/deploy.ini.example");
+
+        self::assertArrayNotHasKey('after', $ini);
+        self::assertStringContainsString('-- composer install', $ini['pfdk_finally'][0]);
+        self::assertStringContainsString('rm -rf public/assets', $ini['pfdk_finally'][1]);
+    }
+
     public function testConventionalFolderNameStaysUnchanged(): void
     {
         mkdir("{$this->dir}/ftp-deployment");
