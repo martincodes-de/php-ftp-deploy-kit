@@ -227,6 +227,54 @@ final class DatabaseCommandsTest extends ProjectTestCase
         self::assertStringNotContainsString('manual', $tester->getDisplay());
     }
 
+    public function testRotationKeepsTheNewestStampEvenWhenFileTimesDisagree(): void
+    {
+        $this->writeIni("pfdk_db = var/database.db\npfdk_backups_keep = 2\n");
+        $this->remote->files[self::LIVE] = 'live';
+        $this->seedBackups([
+            'pfdk-database-20240101-000003.db' => 1000,
+            'pfdk-database-20240101-000002.db' => 2000,
+            'pfdk-database-20240101-000001.db' => 3000,
+        ]);
+
+        $this->execute('backup');
+
+        self::assertFileDoesNotExist("{$this->dir}/backups/pfdk-database-20240101-000001.db");
+        self::assertFileDoesNotExist("{$this->dir}/backups/pfdk-database-20240101-000002.db");
+        self::assertFileExists("{$this->dir}/backups/pfdk-database-20240101-000003.db");
+    }
+
+    public function testEqualStampsAreOrderedByNameWhateverTheFileTimes(): void
+    {
+        $this->writeIni("pfdk_db = var/database.db\npfdk_backups_keep = 4\n");
+        $this->remote->files[self::LIVE] = 'live';
+        $same = 'pfdk-database-%s20240101-000001.db';
+        $this->seedBackups([sprintf($same, '') => 5, sprintf($same, 'pulled-') => 5, sprintf($same, 'pre-push-') => 5]);
+
+        $this->execute('backup');
+
+        self::assertCount(3, glob("{$this->dir}/backups/pfdk-database-*2024*.db"));
+        self::assertCount(4, glob("{$this->dir}/backups/pfdk-database-*.db"));
+
+        $this->writeIni("pfdk_db = var/database.db\npfdk_backups_keep = 3\n");
+        $this->execute('backup');
+
+        self::assertCount(3, glob("{$this->dir}/backups/pfdk-database-*.db"));
+        self::assertFileDoesNotExist("{$this->dir}/backups/pfdk-database-20240101-000001.db");
+    }
+
+    public function testRotationNeverTouchesDirectories(): void
+    {
+        $this->writeIni("pfdk_db = var/database.db\npfdk_backups_keep = 1\n");
+        $this->remote->files[self::LIVE] = 'live';
+        mkdir("{$this->dir}/backups/pfdk-database-20240101-000001.db", 0777, true);
+
+        $tester = $this->execute('backup');
+
+        self::assertDirectoryExists("{$this->dir}/backups/pfdk-database-20240101-000001.db");
+        self::assertStringNotContainsString('Removed', $tester->getDisplay());
+    }
+
     public function testRotationWithKeepZeroDeletesNothingEvenWithPrefixedFiles(): void
     {
         $this->writeIni("pfdk_db = var/database.db\npfdk_backups_keep = 0\n");
