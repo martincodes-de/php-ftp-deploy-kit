@@ -249,6 +249,39 @@ final class DeployCommandTest extends ProjectTestCase
         self::assertSame("staging\n", file_get_contents("{$this->dir}/finally.log"));
     }
 
+    public function testNoDbSkipsTheMigrationQuestionAndTellsSo(): void
+    {
+        $remote = $this->symfonyProject('echo migrated >> var/database.db');
+
+        $tester = $this->deploy(['--no-db' => true], ['y', 'y'], $remote);
+
+        self::assertSame(0, $tester->getStatusCode(), $tester->getDisplay());
+        self::assertSame("live\n", $remote->files['var/database.db'], 'the live database stays as it is');
+        self::assertStringNotContainsString('Pull, migrate and push', $tester->getDisplay());
+        self::assertStringContainsString('--no-db: the database is not touched', $tester->getDisplay());
+        self::assertStringContainsString('args:', $tester->getDisplay(), 'the deploy itself still runs');
+    }
+
+    public function testNoDbSetsTheSwitchForTheDeployment(): void
+    {
+        $this->writeFakeDg(0);
+        $this->writeIni();
+
+        self::assertStringContainsString('nodb=1', $this->deploy(['--no-db' => true])->getDisplay());
+        self::assertStringContainsString('nodb=unset', $this->deploy([])->getDisplay());
+    }
+
+    public function testNoDbAlsoAppliesToADryRun(): void
+    {
+        $this->writeFakeDg(0);
+        $this->writeIni();
+
+        $tester = $this->deploy(['--no-db' => true, '--dry' => true]);
+
+        self::assertStringContainsString('--test', $tester->getDisplay());
+        self::assertStringContainsString('nodb=1', $tester->getDisplay(), 'dg runs the before[] jobs in a dry run too');
+    }
+
     private function symfonyProject(string $migration): InMemoryRemoteFiles
     {
         $this->writeFakeDg(0);
@@ -275,6 +308,6 @@ final class DeployCommandTest extends ProjectTestCase
     private function writeFakeDg(int $exitCode): void
     {
         mkdir("{$this->dir}/vendor/dg/ftp-deployment", 0777, true);
-        file_put_contents("{$this->dir}/vendor/dg/ftp-deployment/deployment", "<?php\necho 'args: ' . implode(' ', array_slice(\$argv, 1));\nexit($exitCode);\n");
+        file_put_contents("{$this->dir}/vendor/dg/ftp-deployment/deployment", "<?php\necho 'args: ' . implode(' ', array_slice(\$argv, 1)) . ' nodb=' . (getenv('PFDK_NO_DB') ?: 'unset');\nexit($exitCode);\n");
     }
 }

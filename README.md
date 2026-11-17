@@ -42,7 +42,7 @@ php ftp-deployment/vendor/bin/pfdk deploy
 | Command | What it does |
 | --- | --- |
 | `pfdk init [preset]` | Install a preset (asks if you give none) |
-| `pfdk deploy [--dry] [--pull]` | Run dg. For Symfony projects with a database it offers to migrate first |
+| `pfdk deploy [--dry] [--pull] [--no-db]` | Run dg. For Symfony projects with a database it offers to migrate first; `--no-db` never touches the database (see [Databases](#databases)) |
 | `pfdk backup` | Download the live database into the backup folder |
 | `pfdk db:pull` | Replace the local database with the live one (the local one is kept) |
 | `pfdk db:init` | Fresh server: create the database folder and upload the local database; never overwrites a live one |
@@ -79,6 +79,7 @@ Building assets, clearing caches and the like are plain `before[]` / `after[]` j
 
 - Only **SQLite** files can be pulled and pushed over FTP. MariaDB and MySQL are not supported by these commands; deploying the code works for any app.
 - A missing folder of the database file (for example `var/database` on a fresh server) is created by the first `db:push`, also with `file://`.
+- **Deploy without touching the database:** once real data lives in the live database, run `pfdk deploy --no-db`. There is no migration offer, and pfdk sets `PFDK_NO_DB=1` for dg, so a `pfdk backup` step in `before[]` does nothing instead of downloading the database, and `db:pull`, `db:push`, `db:init` and `db:migrate` refuse. The variable works on its own too (`PFDK_NO_DB=1 pfdk db:push` refuses), for CI or an alias. Only the value `1` counts.
 - `db:push` uploads to `<name>.pfdk-upload`, checks the size, then renames it over the live file, so an aborted upload leaves no truncated database. A server that reports no file size is not trusted: the push is aborted, the live file untouched.
 - If the rename's answer gets lost, pfdk reads the state back instead of guessing; if even that fails it stops and names the two files to check. It deletes the old live file only when the server explicitly refuses to rename over it, and then keeps the complete new file as `<name>.pfdk-upload` if the last rename fails.
 - `db:push` replaces the whole file. Run it when nobody writes to the live app.

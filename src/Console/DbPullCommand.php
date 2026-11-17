@@ -12,6 +12,12 @@ final class DbPullCommand extends BaseCommand
 {
     protected function execute(InputInterface $input, OutputInterface $output): int
     {
+        if ($this->databaseDisabled()) {
+            $output->writeln('<error>Refused: the database is switched off (PFDK_NO_DB / deploy --no-db).</error>');
+
+            return self::FAILURE;
+        }
+
         $config = $this->config($input, $output);
         $stamp = $this->stamp();
         $pulled = $config->backupFile("pfdk-database-pulled-$stamp.db");

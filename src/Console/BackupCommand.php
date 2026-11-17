@@ -12,6 +12,12 @@ final class BackupCommand extends BaseCommand
 {
     protected function execute(InputInterface $input, OutputInterface $output): int
     {
+        if ($this->databaseDisabled()) {
+            $output->writeln('<comment>Skipped: the database is switched off (PFDK_NO_DB / deploy --no-db).</comment>');
+
+            return self::SUCCESS;
+        }
+
         $config = $this->config($input, $output);
         $target = $config->backupFile("pfdk-database-{$this->stamp()}.db");
 

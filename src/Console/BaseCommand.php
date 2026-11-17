@@ -152,6 +152,12 @@ abstract class BaseCommand extends Command
         return preg_match('~^(/|[A-Za-z]:)~', $path) === 1 ? $path : $config->projectDir() . '/' . $path;
     }
 
+    /** Set by `deploy --no-db` for everything dg runs, or by hand for CI. The database commands then keep their hands off. */
+    protected function databaseDisabled(): bool
+    {
+        return getenv('PFDK_NO_DB') === '1';
+    }
+
     protected function stamp(): string
     {
         return date('Ymd-His');

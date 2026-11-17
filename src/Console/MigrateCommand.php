@@ -21,6 +21,12 @@ final class MigrateCommand extends BaseCommand
 
     protected function execute(InputInterface $input, OutputInterface $output): int
     {
+        if ($this->databaseDisabled()) {
+            $output->writeln('<error>Refused: the database is switched off (PFDK_NO_DB / deploy --no-db).</error>');
+
+            return self::FAILURE;
+        }
+
         $config = $this->config($input, $output);
         if ($config->type !== 'symfony') {
             $output->writeln('<error>db:migrate needs pfdk_type = symfony in the ini.</error>');

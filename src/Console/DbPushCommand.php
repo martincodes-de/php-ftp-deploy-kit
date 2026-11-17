@@ -20,6 +20,12 @@ final class DbPushCommand extends BaseCommand
 
     protected function execute(InputInterface $input, OutputInterface $output): int
     {
+        if ($this->databaseDisabled()) {
+            $output->writeln('<error>Refused: the database is switched off (PFDK_NO_DB / deploy --no-db).</error>');
+
+            return self::FAILURE;
+        }
+
         $config = $this->config($input, $output);
         $local = $config->localDbFile();
 

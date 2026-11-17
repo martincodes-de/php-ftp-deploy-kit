@@ -22,7 +22,8 @@ final class DeployCommand extends BaseCommand implements SignalableCommandInterf
     {
         parent::configure();
         $this->addOption('dry', null, InputOption::VALUE_NONE, 'Preview only (dg --test)')
-            ->addOption('pull', null, InputOption::VALUE_NONE, 'Run git pull --ff-only first');
+            ->addOption('pull', null, InputOption::VALUE_NONE, 'Run git pull --ff-only first')
+            ->addOption('no-db', null, InputOption::VALUE_NONE, 'Do not touch the database: no migration offer, database steps in the jobs are skipped');
     }
 
     protected function execute(InputInterface $input, OutputInterface $output): int
@@ -42,7 +43,12 @@ final class DeployCommand extends BaseCommand implements SignalableCommandInterf
             return self::FAILURE;
         }
 
-        if ($this->shouldMigrateFirst($config, $input, $output) && !$this->migrate($config, $input, $output)) {
+        $noDb = (bool) $input->getOption('no-db');
+        if ($noDb) {
+            $output->writeln('<comment>--no-db: the database is not touched (no migration offer, backup and other database steps are skipped).</comment>');
+        }
+
+        if (!$noDb && $this->shouldMigrateFirst($config, $input, $output) && !$this->migrate($config, $input, $output)) {
             return self::FAILURE;
         }
 
@@ -55,7 +61,7 @@ final class DeployCommand extends BaseCommand implements SignalableCommandInterf
         }
 
         try {
-            $deployed = $this->runProcess($command, $output, isDeployment: true);
+            $deployed = $this->runProcess($command, $output, isDeployment: true, env: $noDb ? ['PFDK_NO_DB' => '1'] : []);
         } finally {
             $cleaned = $this->runFinally($config, $output);
         }
@@ -118,11 +124,14 @@ final class DeployCommand extends BaseCommand implements SignalableCommandInterf
         return null;
     }
 
-    /** @param list<string> $command */
-    private function runProcess(array $command, OutputInterface $output, bool $isDeployment = false): bool
+    /**
+     * @param list<string>          $command
+     * @param array<string, string> $env     added to the environment of the child, which keeps the rest
+     */
+    private function runProcess(array $command, OutputInterface $output, bool $isDeployment = false, array $env = []): bool
     {
         // A deployment can outlive Process' default 60 s limit.
-        $process = new Process($command, null, null, null, null);
+        $process = new Process($command, null, $env === [] ? null : $env, null, null);
         $this->deployment = $isDeployment ? $process : null;
         try {
             $process->run(static fn (string $type, string $buffer) => $output->write($buffer));
