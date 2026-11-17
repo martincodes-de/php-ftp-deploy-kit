@@ -267,6 +267,11 @@ final class CurlRemoteFiles implements RemoteFiles
         $target = $this->folderPath($remotePath);
         $partial = $this->folderPath($temporary);
 
+        $folder = dirname($partial);
+        if (!is_dir($folder) && !@mkdir($folder, 0777, true) && !is_dir($folder)) {
+            throw new \RuntimeException("Upload failed: cannot create the folder for $remotePath");
+        }
+
         if (!@copy($localFile, $partial) || filesize($partial) !== filesize($localFile)) {
             @unlink($partial);
 

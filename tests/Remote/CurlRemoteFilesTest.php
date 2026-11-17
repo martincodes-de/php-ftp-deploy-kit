@@ -58,12 +58,22 @@ final class CurlRemoteFilesTest extends ProjectTestCase
         self::assertSame('local', file_get_contents("{$this->serverDir}/db.sqlite"));
     }
 
-    public function testUploadFailureIsReported(): void
+    public function testUploadCreatesMissingFolders(): void
     {
         file_put_contents("{$this->dir}/local.sqlite", 'local');
 
-        $this->expectExceptionMessage('Upload failed');
-        $this->remote()->upload("{$this->dir}/local.sqlite", 'no-such-dir/db.sqlite');
+        $this->remote()->upload("{$this->dir}/local.sqlite", 'var/database/db.sqlite');
+
+        self::assertSame('local', file_get_contents("{$this->serverDir}/var/database/db.sqlite"));
+    }
+
+    public function testUploadFailureIsReported(): void
+    {
+        file_put_contents("{$this->dir}/local.sqlite", 'local');
+        file_put_contents("{$this->serverDir}/var", 'a file where a folder is needed');
+
+        $this->expectExceptionMessage('Upload failed: cannot create the folder');
+        $this->remote()->upload("{$this->dir}/local.sqlite", 'var/database/db.sqlite');
     }
 
     public function testFtpsUsesExplicitTlsLikeDgInsteadOfCurlsImplicitFtps(): void
