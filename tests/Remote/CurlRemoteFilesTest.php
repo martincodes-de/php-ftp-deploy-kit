@@ -76,6 +76,37 @@ final class CurlRemoteFilesTest extends ProjectTestCase
         $this->remote()->upload("{$this->dir}/local.sqlite", 'var/database/db.sqlite');
     }
 
+    public function testCreatesFoldersListsAndDeletesThem(): void
+    {
+        $remote = $this->remote();
+        $remote->createFolder('var/database');
+        $remote->createFolder('var/database');
+        file_put_contents("{$this->serverDir}/var/database/a.db", 'x');
+
+        self::assertSame(['database'], $remote->names('var'));
+        self::assertSame(['a.db'], $remote->names('var/database'));
+        self::assertFalse($remote->deleteFolder('var/database'), 'a folder with content is refused');
+        self::assertFalse($remote->deleteFile('var/database'), 'a folder is not a file');
+        self::assertTrue($remote->deleteFile('var/database/a.db'));
+        self::assertTrue($remote->deleteFolder('var/database'));
+        self::assertFalse($remote->deleteFile('var/database/a.db'), 'a missing file is refused');
+        self::assertFalse($remote->deleteFolder('var/database'), 'a missing folder is refused');
+    }
+
+    public function testCreateFolderFailsWhenAFileIsInTheWay(): void
+    {
+        file_put_contents("{$this->serverDir}/var", 'a file');
+
+        $this->expectExceptionMessage('Cannot create the folder');
+        $this->remote()->createFolder('var/database');
+    }
+
+    public function testListingAMissingFolderFails(): void
+    {
+        $this->expectExceptionMessage('Cannot list');
+        $this->remote()->names('nope');
+    }
+
     public function testFtpsUsesExplicitTlsLikeDgInsteadOfCurlsImplicitFtps(): void
     {
         $url = $this->urlFor('ftps://u:p@host/app');

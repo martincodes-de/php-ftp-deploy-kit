@@ -20,6 +20,12 @@ final class ApplicationFactory
             new BackupCommand($remoteFactory),
             new DbPullCommand($remoteFactory),
             new DbPushCommand($remoteFactory),
+            new DbInitCommand($remoteFactory),
+            new RemoteMkdirCommand($remoteFactory),
+            new RemoteLsCommand($remoteFactory),
+            new RemoteRmCommand($remoteFactory),
+            new RemoteUploadCommand($remoteFactory),
+            new RemoteDownloadCommand($remoteFactory),
             new MigrateCommand($remoteFactory),
             new ExecCommand($remoteFactory),
         ]);

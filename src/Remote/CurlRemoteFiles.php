@@ -107,6 +107,89 @@ final class CurlRemoteFiles implements RemoteFiles
         $this->replace($temporary, $remotePath, $size);
     }
 
+    public function createFolder(string $remoteFolder): void
+    {
+        if ($this->config->scheme === 'file') {
+            $folder = $this->folderPath($remoteFolder);
+            if (!is_dir($folder) && !@mkdir($folder, 0777, true) && !is_dir($folder)) {
+                throw new \RuntimeException("Cannot create the folder $remoteFolder");
+            }
+
+            return;
+        }
+
+        $marker = rtrim($remoteFolder, '/') . '/.pfdk-folder';
+        $empty = (string) tempnam(sys_get_temp_dir(), 'pfdk');
+        try {
+            $this->transferTemporary($empty, $marker);
+        } finally {
+            @unlink($empty);
+        }
+        $this->removeTemporary($marker);
+    }
+
+    public function names(string $remoteFolder): array
+    {
+        if ($this->config->scheme === 'file') {
+            $entries = @scandir($this->folderPath($remoteFolder));
+            if ($entries === false) {
+                throw new \RuntimeException("Cannot list $remoteFolder");
+            }
+
+            return array_values(array_diff($entries, ['.', '..']));
+        }
+
+        $buffer = fopen('php://memory', 'w+');
+        $result = $this->withRetries(fn (): array => ($this->executor)($this->url(rtrim($remoteFolder, '/') . '/'), [
+            CURLOPT_FILE => $buffer,
+            CURLOPT_DIRLISTONLY => true,
+        ]));
+        if (!$result['ok']) {
+            fclose($buffer);
+
+            throw new \RuntimeException("Listing failed{$this->attemptsNote($result)}: {$result['error']}");
+        }
+
+        rewind($buffer);
+        $lines = preg_split('/\R/', (string) stream_get_contents($buffer)) ?: [];
+        fclose($buffer);
+
+        $names = array_map(static fn (string $line): string => basename(trim($line)), $lines);
+
+        return array_values(array_filter($names, static fn (string $name): bool => !in_array($name, ['', '.', '..'], true)));
+    }
+
+    public function deleteFile(string $remotePath): bool
+    {
+        if ($this->config->scheme === 'file') {
+            return is_file($this->folderPath($remotePath)) && @unlink($this->folderPath($remotePath));
+        }
+
+        return $this->remove('DELE', $remotePath);
+    }
+
+    public function deleteFolder(string $remotePath): bool
+    {
+        if ($this->config->scheme === 'file') {
+            return is_dir($this->folderPath($remotePath)) && @rmdir($this->folderPath($remotePath));
+        }
+
+        return $this->remove('RMD', $remotePath);
+    }
+
+    private function remove(string $command, string $remotePath): bool
+    {
+        $result = $this->once($this->url(''), [CURLOPT_NOBODY => true, CURLOPT_QUOTE => ["$command " . $this->serverPath($remotePath)]]);
+        if ($result['ok']) {
+            return true;
+        }
+        if ($result['errno'] === self::REFUSED) {
+            return false;
+        }
+
+        throw new \RuntimeException("Delete failed: {$result['error']}");
+    }
+
     private function transferTemporary(string $localFile, string $temporary): void
     {
         $result = $this->withRetries(function () use ($localFile, $temporary): array {

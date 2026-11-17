@@ -136,6 +136,22 @@ abstract class BaseCommand extends Command
         }
     }
 
+    /** A path below the remote path: no leading or trailing slash, never outside of it. */
+    protected function remoteArgument(string $path, bool $allowEmpty = false): string
+    {
+        $path = trim(trim($path), '/');
+        if (($path === '' && !$allowEmpty) || $path === '.' || str_contains($path, '\\') || in_array('..', explode('/', $path), true)) {
+            throw new \RuntimeException($path === '' ? 'Give a path below the remote path.' : "Not a valid remote path: $path");
+        }
+
+        return $path;
+    }
+
+    protected function projectPath(DeployConfig $config, string $path): string
+    {
+        return preg_match('~^(/|[A-Za-z]:)~', $path) === 1 ? $path : $config->projectDir() . '/' . $path;
+    }
+
     protected function stamp(): string
     {
         return date('Ymd-His');

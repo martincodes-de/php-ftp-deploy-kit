@@ -33,7 +33,7 @@ php ftp-deployment/vendor/bin/pfdk deploy
 ## First deploy (Symfony)
 
 1. Create `.env.prod.local` in the project root with the production secrets (`APP_SECRET`, API keys). Git ignores it, the deploy uploads it.
-2. With SQLite: the deploy never uploads `var/`, so put your database on the server once with `pfdk db:push`.
+2. With SQLite: the deploy never uploads `var/`, so put your database on the server once with `pfdk db:init`. It creates the database folder on a fresh server and uploads your local database, and it refuses to overwrite a live one.
 3. If the host runs an older PHP, set `"config": {"platform": {"php": "8.2"}}` in the project's `composer.json`.
 4. Run `pfdk deploy --dry`, check the file list, then `pfdk deploy`.
 
@@ -45,8 +45,14 @@ php ftp-deployment/vendor/bin/pfdk deploy
 | `pfdk deploy [--dry] [--pull]` | Run dg. For Symfony projects with a database it offers to migrate first |
 | `pfdk backup` | Download the live database into the backup folder |
 | `pfdk db:pull` | Replace the local database with the live one (the local one is kept) |
+| `pfdk db:init` | Fresh server: create the database folder and upload the local database; never overwrites a live one |
 | `pfdk db:push [-y]` | Overwrite the live database with the local one (the live one is saved first) |
 | `pfdk db:migrate [-y]` | Symfony: pull, run the Doctrine migrations locally, push back |
+| `pfdk remote:ls [path]` | List a folder below the remote path |
+| `pfdk remote:mkdir <path>` | Create a folder and its missing parents |
+| `pfdk remote:upload <local> <remote> [-y]` | Upload a file (an existing one is replaced, after a question) |
+| `pfdk remote:download <remote> <local> [-y]` | Download a file; an existing local file is only replaced after a question |
+| `pfdk remote:rm <path> [-r] [-y]` | Delete a file or an empty folder; `-r` deletes a folder with everything in it. Asks first, refuses the remote root and `..` |
 | `pfdk exec -- <command>` | Run a command in the project, through DDEV when it runs |
 
 `-c <ini>` picks the ini. Without it pfdk uses `deploy.ini` or the only `deploy*.ini` one level down, and asks if there are several. A connection or login error always exits non-zero, so a failing backup aborts a deploy.
@@ -76,6 +82,7 @@ Building assets, clearing caches and the like are plain `before[]` / `after[]` j
 - `db:push` uploads to `<name>.pfdk-upload`, checks the size, then renames it over the live file, so an aborted upload leaves no truncated database. A server that reports no file size is not trusted: the push is aborted, the live file untouched.
 - If the rename's answer gets lost, pfdk reads the state back instead of guessing; if even that fails it stops and names the two files to check. It deletes the old live file only when the server explicitly refuses to rename over it, and then keeps the complete new file as `<name>.pfdk-upload` if the last rename fails.
 - `db:push` replaces the whole file. Run it when nobody writes to the live app.
+- `backup` and `db:push` need the folder of the database file to exist; on a fresh server run `db:init` first (a missing folder looks like an access error to the server).
 - No remote shell: migrations run on your machine against a copy. Run `db:migrate` before deploying code that needs the new schema.
 - **Different local and live file** (for example `var/data_dev.db` locally, `var/data_prod.db` live): set `pfdk_db_local`. `db:pull` replaces it, `db:push` uploads it, `db:migrate` migrates it. An empty value counts as not set.
 - With `pfdk_db_local` the app's `DATABASE_URL` must point at that file, for example `sqlite:///%kernel.project_dir%/var/data_dev.db`. If the migration leaves the file unchanged, `db:migrate` warns and does not push, so an unmigrated copy never replaces the live database.
